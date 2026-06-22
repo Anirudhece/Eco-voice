@@ -1,0 +1,22 @@
+# Instructions for AI Agents
+
+To help the user learn local AI engineering concepts and prepare for technical interviews, you must follow these rules:
+
+1. **Document Every Milestone:**
+   - Before starting a milestone, create a markdown file in the `Docs/Milestones/` directory named `Milestone_X_Name.md` (for example: `Docs/Milestones/Milestone_0_Environment_Setup.md`).
+   - Use simple English. Avoid overly complex jargon without explaining it.
+   
+2. **Each Milestone File Must Include:**
+   - **What we are doing:** A simple description of the tasks.
+   - **Why we are doing it:** The engineering reason behind this milestone.
+   - **What we want to achieve (The Gate):** Clear, testable pass/fail criteria.
+   - **Trade-offs & Core Concepts:** Simple explanations of technical choices, terms, and trade-offs. This serves as a learning journal and study guide for technical interviews.
+
+3. **Keep the Project Plan Updated:**
+   - Update `Docs/EcoVoice_plan2.md` to mark completed milestones.
+
+4. **Document Research Findings Before Moving On:**
+   - When benchmarks, experiments, or dead-ends during a milestone produce significant findings (model doesn't work, approach fails, trade-off discovered), stop and create a research document before moving to the next milestone.
+   - Save in `Docs/Research/` with format: `Research_MX_Topic.md` (MX = related milestone number).
+   - Must include: what was tested, results, issues found, observations, lessons learned, and the decision/reasoning for next steps.
+   - Update the related milestone file to reference the research findings.
