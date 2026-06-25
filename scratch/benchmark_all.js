@@ -1,4 +1,4 @@
-import { getLlama, LlamaChatSession } from "node-llama-cpp";
+import { getLlama, LlamaChatSession, QwenChatWrapper } from "node-llama-cpp";
 import path from "path";
 import fs from "fs";
 import { fileURLToPath } from "url";
@@ -63,7 +63,7 @@ function emptyResults(modelName) {
 }
 
 // ── Qwen / Llama runner (node-llama-cpp) ─────────────────────
-async function runLLM(modelName, ggufFile) {
+async function runLLM(modelName, ggufFile, chatWrapper) {
     const results = emptyResults(modelName);
     const modelPath = path.join(__dirname, "models", ggufFile);
 
@@ -80,10 +80,12 @@ async function runLLM(modelName, ggufFile) {
     // ── Short sentences (same as before) ──
     for (const input of testInputs) {
         const context = await model.createContext();
-        const session = new LlamaChatSession({
+        const sessionOptions = {
             contextSequence: context.getSequence(),
             systemPrompt
-        });
+        };
+        if (chatWrapper) sessionOptions.chatWrapper = chatWrapper;
+        const session = new LlamaChatSession(sessionOptions);
 
         let tokenCount = 0;
         let ttft = null;
@@ -113,10 +115,12 @@ async function runLLM(modelName, ggufFile) {
 
     // ── Long-form dictation ──
     const ctx = await model.createContext();
-    const sess = new LlamaChatSession({
+    const sessOptions = {
         contextSequence: ctx.getSequence(),
         systemPrompt
-    });
+    };
+    if (chatWrapper) sessOptions.chatWrapper = chatWrapper;
+    const sess = new LlamaChatSession(sessOptions);
 
     let tokenCount = 0;
     let ttft = null;
@@ -263,10 +267,18 @@ async function main() {
         "qwen2.5-1.5b-instruct-q4_k_m.gguf"
     ));
 
-    // 2. Phi-4-mini 3.8B (if GGUF exists)
+    // 2. Qwen3 4B (if GGUF exists) — disable thinking mode for speed
+    const qwen3Wrapper = new QwenChatWrapper({ thoughts: "discourage" });
     results.push(await runLLM(
-        "Phi-4-mini 3.8B (Q4_K_M)",
-        "Phi-4-mini-instruct-Q4_K_M.gguf"
+        "Qwen3 4B (Q4_K_M)",
+        "Qwen3-4B-Q4_K_M.gguf",
+        qwen3Wrapper
+    ));
+
+    // 3. Gemma 3 4B (if GGUF exists)
+    results.push(await runLLM(
+        "Gemma 3 4B (Q4_K_M)",
+        "gemma-3-4b-it-Q4_K_M.gguf"
     ));
 
     printComparison(results);

@@ -3,6 +3,9 @@
 - Include issues found, observations, and lessons learned within each milestone document so the user can reference them later. Confidence: 0.75
 - Follow the rules defined in .clinerules and .cursorrules files when they exist in the project. Confidence: 0.75
 
+# architecture
+- Support a hybrid mode in EcoVoice where users can either use a local GGUF model or provide their own OpenAI API key for grammar correction, with the selection configurable from the app settings page. Confidence: 0.70
+
 # documentation
 - Include the complete content of code blocks, prompts, and inputs in documentation — do not truncate with "..." or use "(excerpt)" markers. Confidence: 0.70
 
