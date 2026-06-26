@@ -12,16 +12,11 @@
 2. **Llama 3.2 1B Instruct (Q4_K_M GGUF):**
    * **Status:** Failed to run due to incorrect Hugging Face download URL (downloaded a 49KB HTML error page instead of the 1.2GB model binary).
 
-### Extension: 3-4B Model Benchmarking (Planned)
-The quality benchmarks in [Research_M1_Grammar_Correction_Evaluation.md](../Research/Research_M1_Grammar_Correction_Evaluation.md) revealed that none of the 1-1.5B models meet the quality bar for grammar correction (Qwen 1.5B scored 9/12, Llama 1B hallucinated, T5 GEC truncated on long input). We are extending this milestone to benchmark a **3-4B parameter model** to see if the quality gap can be closed.
+### Extension: Quality Evaluation → Hybrid Architecture Decision
 
-**Candidate:** Phi-4-mini 3.8B (Q4_K_M GGUF) — 2.49 GB, Microsoft's reasoning-focused SLM, MIT license.
+The quality benchmarks in [Research_M1_Grammar_Correction_Evaluation.md](../Research/Research_M1_Grammar_Correction_Evaluation.md) revealed that Qwen 1.5B scores 9/12 on a 12-category ESL grammar benchmark — missing tense consistency, pronoun gender, and word order. Larger models (Qwen3 4B, Phi-4-mini 3.8B) were benchmarked to close the quality gap but were ultimately rejected: the 4B models ran 2.5x slower with marginal quality gains, and both shared the pronoun gender blind spot.
 
-**Testing plan:**
-- Run the same 12-sentence grammar benchmark and the long-form dictation test
-- Verify output quality reaches 12/12 across all error types
-- Measure latency (~300ms target per sentence)
-- Confirm no format contamination (no preamble, quotes, or thinking tokens)
+**Outcome:** Instead of upgrading to a larger local model, the architecture now supports a hybrid mode — users can choose between the local Qwen 1.5B (free, offline, fast) or provide their own OpenAI API key for higher-quality grammar correction via the settings page. See the research doc for the full evaluation.
 
 ## 1. What We Are Doing
 We are going to benchmark local Large Language Models (LLMs) on your Mac. We will:

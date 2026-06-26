@@ -4,7 +4,7 @@
 - Follow the rules defined in .clinerules and .cursorrules files when they exist in the project. Confidence: 0.75
 
 # architecture
-- Support a hybrid mode in EcoVoice where users can either use a local GGUF model or provide their own OpenAI API key for grammar correction, with the selection configurable from the app settings page. Confidence: 0.70
+- Support a hybrid mode in EcoVoice where users can either use a local GGUF model or provide their own OpenAI API key for grammar correction, with the selection configurable from the app settings page. Let the user choose their preferred path (local vs OpenAI) rather than preselecting one. Confidence: 0.75
 
 # documentation
 - Include the complete content of code blocks, prompts, and inputs in documentation — do not truncate with "..." or use "(excerpt)" markers. Confidence: 0.70

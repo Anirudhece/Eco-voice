@@ -278,3 +278,33 @@ The final contenders are both Qwen family models:
 **Trade-off:** Qwen3 4B fixes the word order blind spot and scores perfect 12/12 on short sentences, but at 2.5x the latency. For dictation use cases (where latency is secondary to accuracy), the extra 14 seconds may be acceptable. For interactive use (sentence-by-sentence correction), Qwen 2.5 1.5B's sub-500ms response time is superior.
 
 **Next step:** Test Qwen3 4B speed optimizations (IQ4_XS quantization, smaller context window) to see if the 10.8 tok/s can be improved closer to Qwen 1.5B's 27.9 tok/s.
+
+---
+
+## Architecture Decision: Hybrid Local + OpenAI
+
+**Date:** 2026-06-23
+**Status:** Decided
+
+### Context
+
+After comprehensive benchmarking across 12 ESL error categories:
+- **Qwen 2.5 1.5B** scores 9/12 — misses tense consistency, pronoun gender, and word order
+- **Qwen3 4B** scores 12/12 but runs 2.5x slower (1,236ms avg vs 491ms) and shares the pronoun gender blind spot
+- **Neither model bridges the quality-speed gap** well enough to be the sole grammar engine
+
+### Decision
+
+Adopt a **hybrid architecture** where users can choose between:
+1. **Local mode** (default free path): Qwen 2.5 1.5B via node-llama-cpp — fast, private, offline-capable, good-enough quality
+2. **OpenAI API mode** (optional, user-provided key): GPT-4o-mini (or similar) — higher quality, requires internet, incurs user's own API costs (storage is encrypted in macOS Keychain)
+
+The user selects their preferred path from the settings page. No default is preselected — the choice is presented during first-run setup.
+
+### Implications
+
+- **Qwen3 4B removed from consideration** — the quality gain over Qwen 1.5B doesn't justify the 2.5x latency hit, and the OpenAI path provides a cleaner upgrade path for users who need better quality
+- **Phi-4-mini 3.8B removed from consideration** — best grammar but too slow (1,051ms avg, 2.5x on long-form) and had format contamination
+- **Application code needs a grammar engine abstraction** — a common interface with two implementations: `LocalGrammarEngine` (node-llama-cpp) and `OpenAIGrammarEngine` (openai npm package)
+- **Settings page becomes MVP scope** — API key input, mode toggle, and visual mode indicator are now required features
+- **Milestone plan updated** — M7 now includes the settings page alongside model management
