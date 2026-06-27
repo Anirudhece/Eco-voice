@@ -27,3 +27,6 @@ Docs/plan_review.md.resolved
 .vscode/
 *.swp
 *.swo
+
+# ── Environment variables ──
+*.env

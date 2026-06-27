@@ -12,6 +12,14 @@
 # workflow
 - Download GGUF models from HuggingFace using `curl -L -o` with the resolve/main URL pattern instead of `huggingface-cli download`. Confidence: 0.70
 
+# security
+- Restrict OpenAI API key permissions to only what the app needs: Chat completions permission alone is sufficient for grammar correction — List models and Model capabilities permissions are unnecessary when the app hardcodes the model choice. Confidence: 0.70
+
+# architecture
+- Prefer Gemini API (via GEMINI_API_KEY env var) over Groq for cloud-based grammar correction in EcoVoice, since users are more familiar with Google than with a niche provider like Groq for API key setup. Confidence: 0.70
+- Use `gemini-2.5-flash-lite` as the default Gemini model for cloud grammar correction in EcoVoice — it's lighter than `gemini-2.5-flash` while producing comparable results, even though it takes slightly longer. Confidence: 0.70
+- Never read, view, or console.log the contents of `.env` files or environment variables containing secrets like API keys. Treat secret files as read-restricted — do not open, inspect, or output their contents. Confidence: 0.85
+
 # communication
 - When providing shell commands, include the working directory path so the user knows from where to run them. Confidence: 0.65
 

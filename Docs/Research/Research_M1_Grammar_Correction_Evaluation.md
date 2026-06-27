@@ -297,14 +297,20 @@ After comprehensive benchmarking across 12 ESL error categories:
 
 Adopt a **hybrid architecture** where users can choose between:
 1. **Local mode** (default free path): Qwen 2.5 1.5B via node-llama-cpp — fast, private, offline-capable, good-enough quality
-2. **OpenAI API mode** (optional, user-provided key): GPT-4o-mini (or similar) — higher quality, requires internet, incurs user's own API costs (storage is encrypted in macOS Keychain)
+2. **Gemini API mode** (optional, user-provided key): gemini-2.5-flash-lite — higher quality for edge cases, requires internet, uses user's own API key (free tier available, no pre-paid credits needed)
 
 The user selects their preferred path from the settings page. No default is preselected — the choice is presented during first-run setup.
 
+**Why Gemini over OpenAI/Groq:**
+- OpenAI requires pre-paid credits (blocked in testing with 429)
+- Groq is unfamiliar to non-AI-developer users (brand trust issue)
+- Gemini has a free tier with no credit card, Google brand recognition, and an OpenAI-compatible API
+- Pipeline testing showed local Qwen actually beats Gemini on everyday dictation quality, so cloud is a supplementary upgrade for edge cases
+
 ### Implications
 
-- **Qwen3 4B removed from consideration** — the quality gain over Qwen 1.5B doesn't justify the 2.5x latency hit, and the OpenAI path provides a cleaner upgrade path for users who need better quality
-- **Phi-4-mini 3.8B removed from consideration** — best grammar but too slow (1,051ms avg, 2.5x on long-form) and had format contamination
-- **Application code needs a grammar engine abstraction** — a common interface with two implementations: `LocalGrammarEngine` (node-llama-cpp) and `OpenAIGrammarEngine` (openai npm package)
-- **Settings page becomes MVP scope** — API key input, mode toggle, and visual mode indicator are now required features
+- **Qwen3 4B removed from consideration** — the quality gain over Qwen 1.5B doesn't justify the 2.5x latency hit
+- **Phi-4-mini 3.8B removed from consideration** — best grammar but too slow (1,051ms avg) and had format contamination
+- **Application code needs a grammar engine abstraction** — a common interface with two implementations: `LocalGrammarEngine` (node-llama-cpp) and `GeminiGrammarEngine` (OpenAI SDK → Google endpoint)
+- **Settings page becomes MVP scope** — API key input, mode toggle, and visual mode indicator are required features
 - **Milestone plan updated** — M7 now includes the settings page alongside model management

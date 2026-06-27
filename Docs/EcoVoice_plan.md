@@ -1,7 +1,7 @@
 # EcoVoice — Project Plan & Milestones
 
 **Platform target:** macOS (Apple Silicon) first, Windows/Linux later
-**Stack:** Electron (Node.js native) · whisper-node · node-llama-cpp · Qwen2.5-1.5B-Instruct (Q4_K_M GGUF) · OpenAI API (optional grammar backend)
+**Stack:** Electron (Node.js native) · whisper-node · node-llama-cpp · Qwen2.5-1.5B-Instruct (Q4_K_M GGUF) · Gemini API (optional grammar backend)
 
 ## Decisions made before building (context for future-you)
 
@@ -10,7 +10,7 @@ A few things were deliberately settled before writing code, so they don't get re
 - **Free for everyone, from day one, no monetization plan.** The main gap found versus tools like Wispr Flow and Aqua Voice is pricing (they're subscription-based), not capability — so EcoVoice's edge is "as good as those, but free and fully local," not "good enough since it's free." This means the quality bar for transcription and grammar-polish should be judged against those paid tools directly, not graded on a curve.
 - **Sole maintainer, indefinitely, with no income from this.** That's an accepted tradeoff, not an oversight — worth remembering when scoping features, since every feature added is also a future support burden with no revenue to offset the time.
 - **Stack is Electron + native Node bindings (whisper-node, node-llama-cpp).** Originally planned as Tauri + native bindings, but a real architecture conflict surfaced: Tauri's backend runs Rust, not Node, so Node packages like `node-llama-cpp`/`whisper-node` cannot run inside it directly — they'd need a sidecar Node process with IPC wiring, or a switch to Rust-native crates (`whisper-rs`, `llama-cpp-2`). Given the project's primary goal is learning AI/local-inference internals — not systems engineering — the sidecar/IPC complexity and Rust crate work were both judged not worth the detour. Electron was chosen instead: it bundles Node natively, so the AI libraries work with zero extra plumbing, at the direct cost of binary size and idle RAM versus Tauri.
-- **Hybrid grammar mode: local LLM + optional OpenAI API.** After extensive benchmarking (12 ESL error categories, long-form dictation), a 1.5B model alone doesn't meet the quality bar for production grammar correction — tense consistency, pronoun gender, and word order errors persist. The local LLM remains the default free path, but users can optionally provide their own OpenAI API key for higher-quality grammar correction via the settings page. The user chooses their preferred path — no default is preselected for them. This decision also removes Qwen3 4B and Phi-4-mini 3.8B from consideration since neither bridged the quality-speed gap well enough to justify the complexity, and the OpenAI path cleanly solves quality for users who need it.
+- **Hybrid grammar mode: local LLM + optional Gemini API.** After extensive benchmarking (12 ESL error categories, long-form dictation, real voice pipeline), the local Qwen 2.5 1.5B model handles most real-world dictation surprisingly well — but edge cases (pronoun gender, mixed conditionals) persist. Users can optionally provide their own Gemini API key for cloud grammar correction via the settings page. Gemini was chosen over OpenAI (requires pre-paid credits) and Groq (niche brand) because: (1) free tier with no credit card needed, (2) Google brand trust for non-AI-developer users, (3) OpenAI-compatible API with zero SDK changes. The selected model is `gemini-2.5-flash-lite` — lighter and cheaper than `gemini-2.5-flash` with comparable grammar quality. The user chooses their preferred path — no default is preselected.
 - **Known consequence: the PRD's <40MB idle RAM target is likely not achievable with Electron.** Electron's baseline footprint alone often exceeds that before any app logic loads. This is an accepted, conscious tradeoff in service of the learning goal, not an oversight — revisit only if idle RAM becomes a real annoyance during Milestone 9 dogfooding, at which point targeted fixes (unloading models when idle, as the original PRD describes) can be explored, but it's not a Phase 1 priority.
 - **Project priorities, in order:** (1) learning AI/local-inference concepts, (2) solving a genuine personal problem, (3) building a real, shippable, native-feeling app — explicitly not chasing monetization. This ordering should break ties when scope decisions come up later (e.g. prefer the path that teaches more about how local inference works, even if a shortcut exists).
 
@@ -59,14 +59,16 @@ Each milestone has a single pass/fail gate. Don't move to the next milestone unt
 
 ---
 
-## Milestone 3 — Pipeline Glue (still no UI)
+## Milestone 3 — Pipeline Glue (still no UI) [COMPLETED]
 
 **Goal:** Chain Milestone 1 + 2 into one script: audio file in → transcribed → polished text out, supporting both grammar backends.
 
-- Single Node script: load a test audio file, run through whisper.cpp, pipe raw transcript into either the local LLM or OpenAI API (via `openai` npm package), print both raw and polished output side by side
-- Test both backends on the same transcripts to compare quality — document the quality gap explicitly so users know what they're choosing between
-- This is where you'll tune the system prompt for both backends — test against transcripts with filler words, broken grammar, run-on sentences (your actual speech patterns are the best test data)
-**Gate:** End-to-end (file → polished text) completes in under 2 seconds for a 10-second clip on the local LLM path. OpenAI path has a separate, looser gate (network latency is variable, but the polish quality must be genuinely better than local). Polished output is a genuine improvement, not just paraphrasing.
+- [x] Single Node script: load a test audio file, run through whisper.cpp, pipe raw transcript into both the local LLM and OpenAI API (via `openai` npm package)
+- [x] Test both backends on the same transcripts to compare quality
+- [x] Tune the system prompt — tested against real voice transcripts with grammar errors
+  **Gate:** End-to-end (file → polished text) in under 2s for the local LLM path. (Completed: **1.82s E2E** — 0.79s ASR + 1.03s LLM. Whisper base.en + Qwen 2.5 1.5B. OpenAI integration code validates but account has no credits — quality comparison deferred.)
+
+**Output:** Pipeline script at `scratch/benchmark_pipeline.js`. Qwen 1.5B produces better grammar quality than the 9/12 benchmark score suggested — on connected, contextual text it's near-flawless. Head-to-head with Gemini 2.5 Flash Lite on a real voice transcript, Qwen beat Gemini on both speed (1.1s vs 5.4s) and polish quality (better transition words, sentence flow). Cloud path adds latency but gives users a trusted upgrade option for edge cases. Model chosen: `gemini-2.5-flash-lite` via Google's OpenAI-compatible endpoint.
 
 ---
 
@@ -147,6 +149,6 @@ Explicitly out of scope until a Phase 2 decision: transcription history, multili
 
 ---
 
-## nImmediate Next Step
+## Immediate Next Step
 
-Milestone 3: Pipeline Glue — chain Whisper ASR + both grammar backends (local Qwen LLM + OpenAI API) into a single end-to-end script.
+Milestone 4: Scaffold the Electron app — global hotkey, floating overlay window, and macOS permission handling.
