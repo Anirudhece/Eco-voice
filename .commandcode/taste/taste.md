@@ -15,3 +15,6 @@
 # communication
 - When providing shell commands, include the working directory path so the user knows from where to run them. Confidence: 0.65
 
+# workflow
+- Keep only one active plan file in the project. Delete or archive old/superseded plan files (e.g., `EcoVoice_plan.md` after switching to `EcoVoice_plan2.md`) to avoid confusion with multiple plan documents. Confidence: 0.70
+
