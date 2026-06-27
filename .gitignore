@@ -7,6 +7,7 @@ scratch/node_modules/
 
 # ── Model / pipeline cache ──
 scratch/.cache/
+scratch/*.wav
 
 # ── Temp / scratch notes (not part of the permanent record) ──
 temp/
