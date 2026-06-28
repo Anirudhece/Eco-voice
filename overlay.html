@@ -28,6 +28,7 @@
       padding: 16px 20px;
     }
 
+    /* ── Waveform bars ── */
     .waveform {
       display: flex;
       align-items: center;
@@ -39,7 +40,26 @@
       width: 3px;
       border-radius: 2px;
       background: #4ade80;
+      transition: background 0.3s;
+    }
+
+    body.recording .waveform .bar {
       animation: wave 1.2s ease-in-out infinite;
+    }
+
+    body.processing .waveform .bar {
+      animation: pulse 0.8s ease-in-out infinite;
+      background: #fbbf24;
+    }
+
+    body.error .waveform .bar {
+      background: #ef4444;
+      animation: none;
+    }
+
+    body.idle .waveform .bar {
+      background: rgba(74, 222, 128, 0.4);
+      animation: none;
     }
 
     .waveform .bar:nth-child(1) { height: 8px;  animation-delay: 0.0s; }
@@ -55,6 +75,12 @@
       50% { transform: scaleY(0.3); }
     }
 
+    @keyframes pulse {
+      0%, 100% { opacity: 1; transform: scaleY(1); }
+      50% { opacity: 0.4; transform: scaleY(0.5); }
+    }
+
+    /* ── Label ── */
     .label {
       color: rgb(255, 255, 255, 0.6);
       font-size: 12px;
@@ -62,11 +88,94 @@
       letter-spacing: 0.5px;
       white-space: nowrap;
     }
+
+    body.recording .label {
+      color: rgb(255, 255, 255, 0.9);
+    }
+
+    body.error .label {
+      color: #ef4444;
+      font-weight: 600;
+    }
+
+    /* ── Recording dot ── */
+    .dot {
+      width: 8px;
+      height: 8px;
+      border-radius: 50%;
+      background: #ef4444;
+      opacity: 0;
+      transition: opacity 0.2s;
+    }
+
+    body.recording .dot {
+      opacity: 1;
+      animation: blink 0.8s ease-in-out infinite;
+    }
+
+    @keyframes blink {
+      0%, 100% { opacity: 1; }
+      50% { opacity: 0.3; }
+    }
+
+    /* ── Processing spinner ── */
+    .spinner {
+      display: none;
+      width: 16px;
+      height: 16px;
+      border: 2px solid rgba(251, 191, 36, 0.3);
+      border-top-color: #fbbf24;
+      border-radius: 50%;
+      animation: spin 0.6s linear infinite;
+    }
+
+    body.processing .spinner {
+      display: block;
+    }
+
+    body.recording .spinner,
+    body.idle .spinner,
+    body.error .spinner {
+      display: none;
+    }
+
+    @keyframes spin {
+      to { transform: rotate(360deg); }
+    }
+
+    /* ── Close button ── */
+    .close-btn {
+      position: absolute;
+      top: 8px;
+      right: 10px;
+      width: 18px;
+      height: 18px;
+      border-radius: 50%;
+      border: none;
+      background: rgba(255, 255, 255, 0.15);
+      color: rgba(255, 255, 255, 0.7);
+      font-size: 11px;
+      line-height: 18px;
+      text-align: center;
+      cursor: pointer;
+      opacity: 0.7;
+      transition: opacity 0.2s;
+    }
+
+    .close-btn:hover {
+      opacity: 1;
+    }
+
+    .close-btn:hover {
+      background: rgba(255, 255, 255, 0.25);
+      color: #fff;
+    }
   </style>
 </head>
-<body>
+<body class="idle">
   <div class="container">
-    <div class="waveform">
+    <button class="close-btn" id="closeBtn" title="Close">✕</button>
+    <div class="waveform" id="waveform">
       <div class="bar"></div>
       <div class="bar"></div>
       <div class="bar"></div>
@@ -75,7 +184,171 @@
       <div class="bar"></div>
       <div class="bar"></div>
     </div>
-    <span class="label">Listening</span>
+    <div class="spinner" id="spinner"></div>
+    <span class="label" id="label">EcoVoice</span>
+    <div class="dot" id="dot"></div>
   </div>
+
+  <script>
+    (() => {
+      const label = document.getElementById("label");
+      let mediaRecorder = null;
+      let audioChunks = [];
+      let micStream = null;
+
+      function setBodyState(state) {
+        console.log(`[Renderer] setBodyState: ${state}`);
+        document.body.className = state;
+      }
+
+      function cleanUpMedia() {
+        console.log("[Renderer] cleanUpMedia called");
+        if (mediaRecorder && mediaRecorder.state !== "inactive") {
+          console.log("[Renderer] Stopping MediaRecorder");
+          mediaRecorder.stop();
+        }
+        if (micStream) {
+          console.log("[Renderer] Stopping mic tracks");
+          micStream.getTracks().forEach(t => t.stop());
+          micStream = null;
+        }
+      }
+
+      async function startRecording() {
+        console.log("[Renderer] startRecording");
+        try {
+          micStream = await navigator.mediaDevices.getUserMedia({ audio: true });
+          console.log("[Renderer] getUserMedia succeeded");
+
+          const mimeType = MediaRecorder.isTypeSupported("audio/webm;codecs=opus")
+            ? "audio/webm;codecs=opus"
+            : "audio/webm";
+          console.log(`[Renderer] MediaRecorder mimeType: ${mimeType}`);
+
+          mediaRecorder = new MediaRecorder(micStream, { mimeType });
+          audioChunks = [];
+
+          mediaRecorder.ondataavailable = (e) => {
+            console.log(`[Renderer] ondataavailable: ${e.data.size} bytes`);
+            if (e.data.size > 0) audioChunks.push(e.data);
+          };
+
+          mediaRecorder.onstop = async () => {
+            console.log(`[Renderer] MediaRecorder onstop, chunks: ${audioChunks.length}`);
+            micStream.getTracks().forEach(t => t.stop());
+            micStream = null;
+
+            if (audioChunks.length === 0) {
+              console.log("[Renderer] No audio chunks — finishing idle");
+              finishIdle();
+              return;
+            }
+
+            setBodyState("processing");
+            label.textContent = "Processing...";
+
+            const blob = new Blob(audioChunks, { type: "audio/webm" });
+            console.log(`[Renderer] Blob size: ${blob.size}`);
+
+            const arrayBuffer = await blob.arrayBuffer();
+            console.log(`[Renderer] ArrayBuffer size: ${arrayBuffer.byteLength}`);
+
+            try {
+              console.log("[Renderer] Sending transcribe IPC");
+              await window.ecoVoice.transcribe(arrayBuffer);
+              console.log("[Renderer] Transcribe IPC returned");
+            } catch (err) {
+              console.error("[Renderer] Transcribe failed:", err);
+              setBodyState("error");
+              label.textContent = "Transcription failed";
+              window.ecoVoice.recordingComplete();
+            }
+          };
+
+          mediaRecorder.start();
+          console.log("[Renderer] MediaRecorder started");
+          setBodyState("recording");
+          label.textContent = "Listening";
+        } catch (err) {
+          console.error("[Renderer] Mic error:", err);
+          setBodyState("error");
+          label.textContent = err.name === "NotAllowedError"
+            ? "Mic access denied"
+            : "Mic error";
+        }
+      }
+
+      function stopRecording() {
+        console.log(`[Renderer] stopRecording, recorder state: ${mediaRecorder?.state}, micStream: ${!!micStream}`);
+        if (mediaRecorder && mediaRecorder.state !== "inactive") {
+          console.log("[Renderer] Stopping active MediaRecorder");
+          mediaRecorder.stop();
+        } else if (micStream) {
+          console.log("[Renderer] Stopping micStream (no recorder)");
+          micStream.getTracks().forEach(t => t.stop());
+          micStream = null;
+          finishIdle();
+        } else {
+          console.log("[Renderer] Nothing to stop — finishIdle");
+          finishIdle();
+        }
+      }
+
+      function finishIdle() {
+        console.log("[Renderer] finishIdle");
+        setBodyState("idle");
+        label.textContent = "EcoVoice";
+        window.ecoVoice.recordingComplete();
+      }
+
+      // Listen for audio-state changes from main process
+      window.ecoVoice.onAudioStateChange((state) => {
+        console.log(`[Renderer] onAudioStateChange: ${JSON.stringify(state)}`);
+
+        if (typeof state === "object" && state.state === "error") {
+          setBodyState("error");
+          label.textContent = state.message || "Error";
+          return;
+        }
+
+        if (state === "recording") {
+          startRecording();
+        } else if (state === "idle") {
+          stopRecording();
+        }
+      });
+
+      // Listen for transcription results
+      window.ecoVoice.onTranscribeResult((result) => {
+        console.log(`[Renderer] onTranscribeResult: ${JSON.stringify(result)}`);
+        setBodyState("idle");
+        label.textContent = "EcoVoice";
+      });
+
+      // Initialize: ask main process for current state
+      window.ecoVoice.getAudioState().then((state) => {
+        console.log(`[Renderer] getAudioState init: ${state}`);
+        if (state === "recording") {
+          startRecording();
+        }
+      });
+
+      // Close button
+      document.getElementById("closeBtn").addEventListener("click", () => {
+        console.log("[Renderer] Close button clicked");
+        cleanUpMedia();
+        window.ecoVoice.closeOverlay();
+      });
+
+      // Escape key closes overlay
+      document.addEventListener("keydown", (e) => {
+        if (e.key === "Escape") {
+          console.log("[Renderer] Escape pressed");
+          cleanUpMedia();
+          window.ecoVoice.closeOverlay();
+        }
+      });
+    })();
+  </script>
 </body>
 </html>

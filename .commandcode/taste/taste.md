@@ -4,6 +4,9 @@
 - Follow the rules defined in .clinerules and .cursorrules files when they exist in the project. Confidence: 0.75
 
 # architecture
+- Use toggle mode (first keypress starts recording, second stops) for audio capture hotkey in EcoVoice, since Electron's `globalShortcut` doesn't support key-release events needed for true hold-to-talk. Confidence: 0.50
+
+# architecture
 - Support a hybrid mode in EcoVoice where users can either use a local GGUF model or provide their own OpenAI API key for grammar correction, with the selection configurable from the app settings page. Let the user choose their preferred path (local vs OpenAI) rather than preselecting one. Confidence: 0.75
 
 # documentation
@@ -25,7 +28,9 @@
 
 # workflow
 - Keep only one active plan file in the project. Delete or archive old/superseded plan files (e.g., `EcoVoice_plan.md` after switching to `EcoVoice_plan2.md`) to avoid confusion with multiple plan documents. Confidence: 0.70
+- Place milestone plan documents in `Docs/Milestones/` (e.g., `Docs/Milestones/Milestone_5_plan.md`), following the existing convention established by `Milestone_4_Electron_Shell.md`, not directly under `Docs/`. Confidence: 0.65
 
 # code-style
-- Use ES Modules (`"type": "module"` in `package.json`) instead of CommonJS (`require`/`module.exports`) for this project. Confidence: 0.65
+- Use ES Modules (`"type": "module"` in `package.json`) instead of CommonJS (`require`/`module.exports`) for this project. Confidence: 0.72
+- Include timestamps in console.log statements for debugging, to make log output easier to trace over time. Confidence: 0.75
 

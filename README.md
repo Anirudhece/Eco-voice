@@ -22,7 +22,7 @@ Phase 1 — MVP benchmarks and pipeline validation.
 | M2 — ASR Speed Benchmark | ✅ (RTF 0.063x) |
 | M3 — Pipeline Glue | ✅ (1.72s E2E) |
 | M4 — Electron Shell | ✅ |
-| M5 — Audio Capture | Pending |
+| M5 — Audio Capture | 🔨 |
 | M6 — Text Injection | Pending |
 | M7 — Settings + Models | Pending |
 | M8 — Performance Hardening | Pending |

@@ -10,6 +10,10 @@
   "license": "ISC",
   "type": "module",
   "devDependencies": {
+    "@electron/rebuild": "^4.0.6",
     "electron": "^30.0.0"
+  },
+  "dependencies": {
+    "whisper-node": "^1.1.1"
   }
 }

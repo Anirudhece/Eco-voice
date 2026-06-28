@@ -87,14 +87,19 @@ Each milestone has a single pass/fail gate. Don't move to the next milestone unt
 
 ---
 
-## Milestone 5 — Wire Audio Capture into Electron
+## Milestone 5 — Wire Audio Capture into Electron [IN PROGRESS]
 
-**Goal:** Hold-to-talk actually captures mic audio inside the Electron shell.
+**Goal:** Toggle-to-record: first Alt+Space starts mic capture, second press transcribes via whisper.
 
-- Mic permission flow (macOS will prompt on first use — handle the denied-permission case explicitly)
-- Audio buffer capture on hotkey-hold, flush on release
-- Feed into the Milestone 3 pipeline (now living inside the app, not a standalone script)
-**Gate:** Speaking into the held hotkey produces transcribed text printed to console/dev tools within target latency.
+- [x] Toggle recording mode (Electron `globalShortcut` only supports key-down, not key-release — toggle is the pragmatic path)
+- [x] Mic capture via `getUserMedia`/`MediaRecorder` in renderer (handles macOS permission prompt automatically)
+- [x] webm → WAV conversion via `ffmpeg` (async, non-blocking `execFile`)
+- [x] Whisper base.en transcription in main process via IPC
+- [x] 4 visual states: idle, recording (green waveform), processing (yellow pulse), error (red)
+- [x] Close button (✕) and Escape key to dismiss overlay
+- [x] Error handling: mic denied, transcription failure, orphaned windows after crash
+- [ ] Verify end-to-end on user's hardware: record speech → transcription appears in console
+**Gate:** Speaking into the toggled hotkey produces transcribed text printed to console/dev tools within target latency. (Code complete, live test pending — mic permission dialog and actual transcription quality need verification)
 
 ---
 
