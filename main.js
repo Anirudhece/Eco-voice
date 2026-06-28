@@ -1,4 +1,4 @@
-import { app, globalShortcut, BrowserWindow, screen, ipcMain } from "electron";
+import { app, globalShortcut, BrowserWindow, screen, ipcMain, clipboard } from "electron";
 import path from "path";
 import fs from "fs/promises";
 import os from "os";
@@ -17,6 +17,24 @@ function hideAndReset() {
   if (overlay && !overlay.isDestroyed()) {
     overlay.hide();
   }
+}
+
+function injectText(text) {
+  clipboard.writeText(text);
+
+  return new Promise((resolve, reject) => {
+    execFile("osascript", [
+      "-e",
+      'tell application "System Events" to keystroke "v" using command down'
+    ], (err) => {
+      if (err) {
+        console.error("[Inject] osascript failed — text on clipboard for manual paste:", err.message);
+        return reject(err);
+      }
+      console.log(`[Inject] Pasted: "${text.substring(0, 50)}${text.length > 50 ? "..." : ""}"`);
+      resolve();
+    });
+  });
 }
 
 function createOverlay() {
@@ -120,6 +138,14 @@ app.whenReady().then(async () => {
       const text = Array.isArray(result) ? result.map(s => s.speech.trim()).join(" ") : String(result);
 
       hideAndReset();
+
+      try {
+        await injectText(text);
+      } catch {
+        // Text already on clipboard — user can Cmd+V manually
+      }
+
+      console.log(`[${elapsed.toFixed(2)}s] ${text}`);
       overlay.webContents.send("transcribe-result", { text });
 
       return { success: true, text, elapsed };

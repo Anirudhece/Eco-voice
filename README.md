@@ -23,7 +23,7 @@ Phase 1 — MVP benchmarks and pipeline validation.
 | M3 — Pipeline Glue | ✅ (1.72s E2E) |
 | M4 — Electron Shell | ✅ |
 | M5 — Audio Capture | ✅ |
-| M6 — Text Injection | Pending |
+| M6 — Text Injection | ✅ |
 | M7 — Settings + Models | Pending |
 | M8 — Performance Hardening | Pending |
 | M9 — Dogfooding | Pending |
@@ -56,10 +56,13 @@ Set `GEMINI_API_KEY` in `.env` to test the cloud grammar path.
 - [Project Plan](Docs/EcoVoice_plan.md) — Milestones and gating decisions
 - [M1 — LLM Benchmark](Docs/Milestones/Milestone_1_LLM_Speed_Benchmark.md)
 - [M2 — ASR Benchmark](Docs/Milestones/Milestone_2_ASR_Speed_Benchmark.md)
-- [M3 — Pipeline Glue](Docs/Milestones/Milestone_3_Pipeline_Glue.md)
+- [M4 — Electron Shell](Docs/Milestones/Milestone_4_Electron_Shell.md)
+- [M5 — Audio Capture](Docs/Milestones/Milestone_5_Audio_Capture.md)
+- [M6 — Text Injection](Docs/Milestones/Milestone_6_Text_Injection.md)
 - [Research: Grammar Evaluation](Docs/Research/Research_M1_Grammar_Correction_Evaluation.md)
 - [Research: ASR Speed](Docs/Research/Research_M2_ASR_Speed_Benchmark.md)
 - [Research: Pipeline Integration](Docs/Research/Research_M3_Pipeline_Integration.md)
+- [Research: Text Injection Approaches](Docs/Research/Research_M6_Text_Injection_Approaches.md)
 
 ## License
 

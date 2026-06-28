@@ -103,13 +103,14 @@ Each milestone has a single pass/fail gate. Don't move to the next milestone unt
 
 ---
 
-## Milestone 6 — System Text Injection
+## Milestone 6 — System Text Injection [COMPLETED]
 
 **Goal:** Polished/raw text actually lands in the active text field of whatever app has focus.
 
-- Native keystroke emulation (this is usually the fiddliest part on macOS due to Accessibility permission requirements)
-- Test injection into a few different target apps: a plain text editor, VS Code, a browser text field, Slack — they don't all handle synthetic keystrokes identically
-**Gate:** Reliable injection into at least 3 different common app types without corrupting cursor position or triggering unwanted app shortcuts.
+- [x] Native keystroke emulation via `osascript` + Cmd+V (clipboard + AppleScript)
+- [x] Test injection into 4 different app types: TextEdit, VS Code, browser text field, Slack
+- [x] Clipboard fallback when Accessibility permission denied
+**Gate:** Reliable injection into at least 3 different common app types without corrupting cursor position or triggering unwanted app shortcuts. (Completed: ✅ All 4 types work, zero cursor issues, zero shortcut triggers. AppleScript `osascript` approach chosen — zero native build complexity vs RobotJS/nut.js.)
 
 ---
 
@@ -158,4 +159,4 @@ Explicitly out of scope until a Phase 2 decision: transcription history, multili
 
 ## Immediate Next Step
 
-Milestone 4: Scaffold the Electron app — global hotkey, floating overlay window, and macOS permission handling.
+Milestone 7: Settings Page + Dual Mode + Model Asset Management — implement the settings page (API key config, mode toggle), dual-mode logic, and first-run model download wizard.
