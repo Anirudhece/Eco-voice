@@ -1,0 +1,15 @@
+{
+  "name": "ecovoice",
+  "version": "0.1.0",
+  "description": "Local, private speech-to-text with grammar polish",
+  "main": "main.js",
+  "scripts": {
+    "start": "electron .",
+    "dev": "electron ."
+  },
+  "license": "ISC",
+  "type": "module",
+  "devDependencies": {
+    "electron": "^30.0.0"
+  }
+}

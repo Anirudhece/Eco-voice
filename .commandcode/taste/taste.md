@@ -26,3 +26,6 @@
 # workflow
 - Keep only one active plan file in the project. Delete or archive old/superseded plan files (e.g., `EcoVoice_plan.md` after switching to `EcoVoice_plan2.md`) to avoid confusion with multiple plan documents. Confidence: 0.70
 
+# code-style
+- Use ES Modules (`"type": "module"` in `package.json`) instead of CommonJS (`require`/`module.exports`) for this project. Confidence: 0.60
+

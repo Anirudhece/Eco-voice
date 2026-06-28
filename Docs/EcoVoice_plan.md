@@ -72,16 +72,18 @@ Each milestone has a single pass/fail gate. Don't move to the next milestone unt
 
 ---
 
-## Milestone 4 — Electron Shell + Global Hotkey
+## Milestone 4 — Electron Shell + Global Hotkey [COMPLETED]
 
 **Goal:** Get a minimal Electron app that listens for a global hotkey and shows a floating overlay — no audio/LLM logic yet.
 
-- Scaffold Electron project (main process + a lightweight renderer for the overlay)
-- Implement global shortcut registration (Electron's built-in `globalShortcut` module — `Option+Space` or similar)
-- Minimal floating overlay window (frameless, always-on-top) with a waveform placeholder (static is fine for now)
-- Confirm hotkey works across different focused apps (this is where macOS permissions — Accessibility, Microphone — first become a real concern; resolve entitlements now rather than late)
+- [x] Scaffold Electron project (`main.js`, `preload.js`, `overlay.html`, `package.json`)
+- [x] Implement global shortcut registration (Electron's built-in `globalShortcut` module — `Alt+Space`)
+- [x] Minimal floating overlay window (frameless, always-on-top, transparent, `type: "panel"`) with animated CSS waveform placeholder and "Listening" label
+- [x] Confirm hotkey works across different focused apps (this is where macOS permissions — Accessibility, Microphone — first become a real concern; resolve entitlements now rather than late)
 - Since Electron bundles Node natively, `node-llama-cpp` and `whisper-node` can be required directly in the main process — no sidecar process or IPC bridge needed, unlike the original Tauri plan. This is the main complexity this stack switch removes.
-**Gate:** Hotkey reliably shows/hides overlay regardless of which app is focused.
+**Gate:** Hotkey reliably shows/hides overlay regardless of which app is focused. (Completed: `Alt+Space` registers successfully. Overlay toggles on/off. Requires macOS Accessibility permission — one-time manual grant. Code handles denied case with error logging.)
+
+**Output:** `main.js` (71 lines — app lifecycle, global shortcut, overlay window), `preload.js` (6 lines — context bridge), `overlay.html` (82 lines — blurred glass-morphism overlay with animated waveform). Security: context isolation ON, node integration OFF. Window type: `"panel"` (floats above apps, below menubar). See [Milestone 4 doc](Milestones/Milestone_4_Electron_Shell.md) for full details, architecture decisions, and trade-offs.
 
 ---
 
