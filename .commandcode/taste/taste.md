@@ -33,4 +33,5 @@
 # code-style
 - Use ES Modules (`"type": "module"` in `package.json`) instead of CommonJS (`require`/`module.exports`) for this project. Confidence: 0.72
 - Include timestamps in console.log statements for debugging, to make log output easier to trace over time. Confidence: 0.75
+- Remove debug console.log statements before committing code to follow production-level practices. Confidence: 0.70
 

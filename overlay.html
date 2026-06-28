@@ -197,49 +197,39 @@
       let micStream = null;
 
       function setBodyState(state) {
-        console.log(`[Renderer] setBodyState: ${state}`);
         document.body.className = state;
       }
 
       function cleanUpMedia() {
-        console.log("[Renderer] cleanUpMedia called");
         if (mediaRecorder && mediaRecorder.state !== "inactive") {
-          console.log("[Renderer] Stopping MediaRecorder");
           mediaRecorder.stop();
         }
         if (micStream) {
-          console.log("[Renderer] Stopping mic tracks");
           micStream.getTracks().forEach(t => t.stop());
           micStream = null;
         }
       }
 
       async function startRecording() {
-        console.log("[Renderer] startRecording");
         try {
           micStream = await navigator.mediaDevices.getUserMedia({ audio: true });
-          console.log("[Renderer] getUserMedia succeeded");
 
           const mimeType = MediaRecorder.isTypeSupported("audio/webm;codecs=opus")
             ? "audio/webm;codecs=opus"
             : "audio/webm";
-          console.log(`[Renderer] MediaRecorder mimeType: ${mimeType}`);
 
           mediaRecorder = new MediaRecorder(micStream, { mimeType });
           audioChunks = [];
 
           mediaRecorder.ondataavailable = (e) => {
-            console.log(`[Renderer] ondataavailable: ${e.data.size} bytes`);
             if (e.data.size > 0) audioChunks.push(e.data);
           };
 
           mediaRecorder.onstop = async () => {
-            console.log(`[Renderer] MediaRecorder onstop, chunks: ${audioChunks.length}`);
             micStream.getTracks().forEach(t => t.stop());
             micStream = null;
 
             if (audioChunks.length === 0) {
-              console.log("[Renderer] No audio chunks — finishing idle");
               finishIdle();
               return;
             }
@@ -248,17 +238,12 @@
             label.textContent = "Processing...";
 
             const blob = new Blob(audioChunks, { type: "audio/webm" });
-            console.log(`[Renderer] Blob size: ${blob.size}`);
-
             const arrayBuffer = await blob.arrayBuffer();
-            console.log(`[Renderer] ArrayBuffer size: ${arrayBuffer.byteLength}`);
 
             try {
-              console.log("[Renderer] Sending transcribe IPC");
               await window.ecoVoice.transcribe(arrayBuffer);
-              console.log("[Renderer] Transcribe IPC returned");
             } catch (err) {
-              console.error("[Renderer] Transcribe failed:", err);
+              console.error("Transcribe failed:", err);
               setBodyState("error");
               label.textContent = "Transcription failed";
               window.ecoVoice.recordingComplete();
@@ -266,11 +251,10 @@
           };
 
           mediaRecorder.start();
-          console.log("[Renderer] MediaRecorder started");
           setBodyState("recording");
           label.textContent = "Listening";
         } catch (err) {
-          console.error("[Renderer] Mic error:", err);
+          console.error("Mic error:", err);
           setBodyState("error");
           label.textContent = err.name === "NotAllowedError"
             ? "Mic access denied"
@@ -279,23 +263,18 @@
       }
 
       function stopRecording() {
-        console.log(`[Renderer] stopRecording, recorder state: ${mediaRecorder?.state}, micStream: ${!!micStream}`);
         if (mediaRecorder && mediaRecorder.state !== "inactive") {
-          console.log("[Renderer] Stopping active MediaRecorder");
           mediaRecorder.stop();
         } else if (micStream) {
-          console.log("[Renderer] Stopping micStream (no recorder)");
           micStream.getTracks().forEach(t => t.stop());
           micStream = null;
           finishIdle();
         } else {
-          console.log("[Renderer] Nothing to stop — finishIdle");
           finishIdle();
         }
       }
 
       function finishIdle() {
-        console.log("[Renderer] finishIdle");
         setBodyState("idle");
         label.textContent = "EcoVoice";
         window.ecoVoice.recordingComplete();
@@ -303,8 +282,6 @@
 
       // Listen for audio-state changes from main process
       window.ecoVoice.onAudioStateChange((state) => {
-        console.log(`[Renderer] onAudioStateChange: ${JSON.stringify(state)}`);
-
         if (typeof state === "object" && state.state === "error") {
           setBodyState("error");
           label.textContent = state.message || "Error";
@@ -320,14 +297,12 @@
 
       // Listen for transcription results
       window.ecoVoice.onTranscribeResult((result) => {
-        console.log(`[Renderer] onTranscribeResult: ${JSON.stringify(result)}`);
         setBodyState("idle");
         label.textContent = "EcoVoice";
       });
 
       // Initialize: ask main process for current state
       window.ecoVoice.getAudioState().then((state) => {
-        console.log(`[Renderer] getAudioState init: ${state}`);
         if (state === "recording") {
           startRecording();
         }
@@ -335,7 +310,6 @@
 
       // Close button
       document.getElementById("closeBtn").addEventListener("click", () => {
-        console.log("[Renderer] Close button clicked");
         cleanUpMedia();
         window.ecoVoice.closeOverlay();
       });
@@ -343,7 +317,6 @@
       // Escape key closes overlay
       document.addEventListener("keydown", (e) => {
         if (e.key === "Escape") {
-          console.log("[Renderer] Escape pressed");
           cleanUpMedia();
           window.ecoVoice.closeOverlay();
         }

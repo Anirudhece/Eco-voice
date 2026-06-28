@@ -13,13 +13,9 @@ let overlay = null;
 let recordingState = "idle";
 
 function hideAndReset() {
-  console.log(`[hideAndReset] Called, current state: ${recordingState}`);
   recordingState = "idle";
   if (overlay && !overlay.isDestroyed()) {
-    console.log("[hideAndReset] Hiding overlay");
     overlay.hide();
-  } else {
-    console.log(`[hideAndReset] Overlay ${!overlay ? "null" : "destroyed"}`);
   }
 }
 
@@ -55,27 +51,16 @@ function createOverlay() {
 }
 
 function toggleRecording() {
-  console.log(`[Toggle] Called, current state: ${recordingState}`);
-
-  if (!overlay) {
-    console.log("[Toggle] No overlay window — aborting");
-    return;
-  }
+  if (!overlay) return;
 
   if (recordingState === "idle") {
-    console.log("[Toggle] idle → recording");
     recordingState = "recording";
     overlay.show();
     overlay.webContents.send("audio-state", "recording");
   } else if (recordingState === "recording") {
-    console.log("[Toggle] recording → processing");
     recordingState = "processing";
     overlay.webContents.send("audio-state", "idle");
-  } else if (recordingState === "processing") {
-    console.log("[Toggle] Already processing — forcing idle reset");
-    hideAndReset();
   } else {
-    console.log(`[Toggle] Unknown state: ${recordingState} — resetting`);
     hideAndReset();
   }
 }
@@ -112,12 +97,10 @@ app.whenReady().then(async () => {
   ipcMain.handle("get-audio-state", () => recordingState);
 
   ipcMain.handle("close-overlay", () => {
-    console.log("[IPC] close-overlay received");
     hideAndReset();
   });
 
   ipcMain.handle("recording-complete", () => {
-    console.log(`[IPC] recording-complete received, state: ${recordingState}`);
     hideAndReset();
   });
 
@@ -127,20 +110,14 @@ app.whenReady().then(async () => {
     const wavPath = webmPath.replace(/\.webm$/, ".wav");
 
     try {
-      console.log(`[Transcribe] Writing webm buffer (${audioBuffer.byteLength} bytes) to ${webmPath}`);
       await fs.writeFile(webmPath, Buffer.from(audioBuffer));
-
-      console.log("[Transcribe] Converting webm → wav (16kHz mono PCM)");
       await convertWebmToWav(webmPath, wavPath);
 
-      console.log("[Transcribe] Running Whisper base.en");
       const start = Date.now();
       const result = await whisper(wavPath, { modelName: "base.en" });
 
       const elapsed = (Date.now() - start) / 1000;
       const text = Array.isArray(result) ? result.map(s => s.speech.trim()).join(" ") : String(result);
-
-      console.log(`[Transcribe] Done in ${elapsed.toFixed(2)}s: "${text}"`);
 
       hideAndReset();
       overlay.webContents.send("transcribe-result", { text });

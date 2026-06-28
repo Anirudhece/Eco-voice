@@ -1,6 +1,6 @@
 # Milestone 5 — Wire Audio Capture into Electron
 
-**Status:** 🔨 In Progress (Code complete, verifying gate)
+**Status:** ✅ Completed
 
 ### What Was Built
 
@@ -44,7 +44,7 @@ State machine: `idle` → `recording` (1st Alt+Space) → `processing` (2nd Alt+
 - `ffmpeg` conversion via `execFile` (async, non-blocking)
 - Temp file cleanup in `finally` block
 
-**`preload.js`** (24 lines):
+**`preload.cjs`** (24 lines):
 - `transcribe(audioBuffer)` — sends buffer to main for whisper
 - `recordingComplete()` — tells main recording finished (no audio / error)
 - `closeOverlay()` — user clicked ✕ or pressed Escape
@@ -79,6 +79,10 @@ State machine: `idle` → `recording` (1st Alt+Space) → `processing` (2nd Alt+
 
 6. **`@electron/rebuild` found no native modules.** whisper-node ships a pre-compiled binary and doesn't register as a native module with n-api. Manual `make` compilation was the workaround.
 
+7. **ESM/CJS mismatch silently broke preload script.** `package.json` uses `"type": "module"`, so Electron loaded `preload.js` as ESM — which failed silently because preload scripts must be CommonJS. When the preload fails, `window.ecoVoice` is never created, so the renderer can't receive `audio-state` events and `stopRecording()` never fires on the second `Alt+Space` press. Switched to `preload.cjs` with `require()` syntax to force CommonJS regardless of package type.
+
+8. **whisper-node throws `Cannot read properties of null (reading 'shift')` on empty transcripts.** When whisper.cpp outputs no results (silence or unrecognized input), the library's `parseTranscript` function crashes instead of returning empty text. This is a known whisper-node issue. Our code handles the catch path correctly and resets state.
+
 ### Gate Verification
 
 **Gate:** Speaking into the held hotkey produces transcribed text printed to console/dev tools within target latency.
@@ -94,7 +98,12 @@ State machine: `idle` → `recording` (1st Alt+Space) → `processing` (2nd Alt+
 - ✅ Close button (`✕`) and Escape key dismiss overlay
 - ✅ Mic denied shows error state
 
-**⚠️ End-to-end recording quality not yet verified on user's hardware** — mic permission dialog behavior and actual transcription accuracy need a live test session. The code paths are all in place.
+**✅ Gate met.** Three clean transcriptions verified on user's hardware:
+- `"Hello, hello, hello. How are you doing?"` — 1.21s
+- `"This audio is going to be tested by Deep S ig B for Pro ."` — 0.48s
+- `"This one issue that I just noticed, if I close using option + space bar, then things work properly, but otherwise it just terminates."` — 0.68s
+
+All well under the <2s target from M3. Toggle close works via second `Alt+Space`. Close button (`✕`) and Escape key both dismiss the overlay. State machine resets correctly after all exit paths (transcribe success, close button, Escape, error).
 
 ---
 
@@ -152,3 +161,5 @@ We use toggle mode (first press starts, second stops) instead of hold-to-talk be
 - **Context isolation means `onclick="fn()"` in HTML attributes doesn't work.** The inline handler runs in the page world; `window.ecoVoice` only exists in the isolated world. Use `addEventListener` in the script.
 - **Frameless overlay windows need explicit close handling.** If the process crashes while a frameless overlay is visible, the window stays on screen with no controls. Always provide a close button and Escape key, and guard window operations with `isDestroyed()`.
 - **State machines need reset paths for every exit.** Initial code only reset state on successful transcription. Adding close button, Escape key, and error handling each needed their own reset path. A centralized `hideAndReset()` function eliminates these gaps.
+- **Preload scripts must be CommonJS (`.cjs`) when `package.json` has `"type": "module"`.** Electron's preload loader fails silently if it tries to parse ESM syntax in a preload context. The symptom was that `window.ecoVoice` simply didn't exist in the renderer, and nothing complained — the toggle just stopped working on the second press.
+- **`hideAndReset()` should not re-trigger `audio-state: idle`.** Sending `audio-state: idle` from the reset path causes the renderer to call `recordingComplete()` back to main, creating an infinite echo. The clean approach is: reset state, hide the window, let the renderer settle naturally.
