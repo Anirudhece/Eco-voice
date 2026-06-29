@@ -9,6 +9,10 @@ contextBridge.exposeInMainWorld("ecoVoice", {
 
   getAudioState: () => ipcRenderer.invoke("get-audio-state"),
 
+  getPolishMode: () => ipcRenderer.invoke("get-polish-mode"),
+
+  setPolishMode: (enabled) => ipcRenderer.invoke("set-polish-mode", enabled),
+
   onAudioStateChange: (callback) => {
     const handler = (_event, state) => callback(state);
     ipcRenderer.on("audio-state", handler);

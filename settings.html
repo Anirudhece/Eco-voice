@@ -1,0 +1,430 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>EcoVoice Settings</title>
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+      background: #1c1c1e;
+      color: #e5e5e5;
+      padding: 24px 28px;
+      user-select: none;
+    }
+
+    h1 {
+      font-size: 13px;
+      font-weight: 600;
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+      color: #8e8e93;
+      margin-bottom: 12px;
+    }
+
+    .section {
+      margin-bottom: 24px;
+    }
+
+    .section:last-child { margin-bottom: 0; }
+
+    /* ── Radio group ── */
+    .radio-group {
+      display: flex;
+      flex-direction: column;
+      gap: 6px;
+    }
+
+    .radio-item {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      padding: 8px 12px;
+      border-radius: 8px;
+      cursor: pointer;
+      transition: background 0.15s;
+    }
+
+    .radio-item:hover { background: rgba(255,255,255,0.05); }
+
+    .radio-item input[type="radio"] {
+      appearance: none;
+      width: 14px; height: 14px;
+      border-radius: 50%;
+      border: 2px solid #48484a;
+      background: transparent;
+      cursor: pointer;
+      flex-shrink: 0;
+    }
+
+    .radio-item input[type="radio"]:checked {
+      border-color: #4ade80;
+      background: #4ade80;
+      box-shadow: inset 0 0 0 3px #1c1c1e;
+    }
+
+    .radio-label {
+      display: flex;
+      flex-direction: column;
+    }
+
+    .radio-title { font-size: 13px; font-weight: 500; }
+    .radio-desc { font-size: 11px; color: #8e8e93; }
+
+    /* ── API key input ── */
+    .apikey-row {
+      margin-top: 10px;
+      display: none;
+      gap: 8px;
+    }
+
+    .apikey-row.visible { display: flex; }
+
+    .apikey-row input {
+      flex: 1;
+      background: #2c2c2e;
+      border: 1px solid #3a3a3c;
+      border-radius: 6px;
+      padding: 6px 10px;
+      font-size: 12px;
+      color: #e5e5e5;
+      font-family: monospace;
+    }
+
+    .apikey-row input:focus {
+      outline: none;
+      border-color: #4ade80;
+    }
+
+    .apikey-row button {
+      background: #2c2c2e;
+      border: 1px solid #3a3a3c;
+      border-radius: 6px;
+      padding: 6px 12px;
+      font-size: 12px;
+      color: #e5e5e5;
+      cursor: pointer;
+      white-space: nowrap;
+    }
+
+    .apikey-row button:hover { background: #3a3a3c; }
+
+    .saved-indicator {
+      font-size: 11px;
+      color: #4ade80;
+      margin-left: 6px;
+      opacity: 0;
+      transition: opacity 0.3s;
+    }
+
+    .saved-indicator.show { opacity: 1; }
+
+    /* ── Model status ── */
+    .model-row {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 8px 12px;
+      border-radius: 8px;
+      background: #2c2c2e;
+      margin-bottom: 6px;
+    }
+
+    .model-info {
+      display: flex;
+      flex-direction: column;
+      gap: 2px;
+    }
+
+    .model-name { font-size: 12px; font-weight: 500; }
+    .model-size { font-size: 11px; color: #8e8e93; }
+
+    .model-status {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+    }
+
+    .status-downloaded { color: #4ade80; font-size: 11px; }
+    .status-missing { color: #fbbf24; font-size: 11px; }
+
+    .requirement-badge {
+      font-size: 9px;
+      font-weight: 600;
+      text-transform: uppercase;
+      letter-spacing: 0.3px;
+      padding: 1px 5px;
+      border-radius: 3px;
+      margin-left: 6px;
+      vertical-align: middle;
+    }
+
+    .requirement-badge.mandatory {
+      background: rgba(239, 68, 68, 0.15);
+      color: #ef4444;
+    }
+
+    .requirement-badge.optional {
+      background: rgba(139, 156, 180, 0.12);
+      color: #8b9cb4;
+    }
+
+    .model-hint {
+      font-size: 10px;
+      color: #6b6b70;
+      margin-top: 2px;
+      line-height: 1.4;
+    }
+
+    .download-btn {
+      background: #2c2c2e;
+      border: 1px solid #48484a;
+      border-radius: 6px;
+      padding: 4px 10px;
+      font-size: 11px;
+      color: #e5e5e5;
+      cursor: pointer;
+      white-space: nowrap;
+    }
+
+    .download-btn:hover { background: #3a3a3c; }
+    .download-btn:disabled { opacity: 0.4; cursor: default; }
+
+    .download-btn.downloading {
+      border-color: #4ade80;
+      color: #4ade80;
+    }
+
+    /* ── Progress bar ── */
+    .progress-wrap {
+      width: 100%;
+      margin-top: 4px;
+    }
+
+    .progress-bar {
+      width: 100%;
+      height: 4px;
+      border-radius: 2px;
+      background: #3a3a3c;
+      overflow: hidden;
+    }
+
+    .progress-fill {
+      height: 100%;
+      background: #4ade80;
+      width: 0%;
+      transition: width 0.2s;
+    }
+
+    .progress-label {
+      font-size: 10px;
+      color: #8e8e93;
+      margin-top: 2px;
+      text-align: right;
+    }
+
+    /* ── About ── */
+    .about-text {
+      font-size: 12px;
+      color: #8e8e93;
+      line-height: 1.6;
+    }
+
+    .about-text p { margin-bottom: 4px; }
+
+    /* ── Divider ── */
+    .divider {
+      height: 1px;
+      background: #3a3a3c;
+      margin: 20px 0;
+    }
+
+    /* ── Scroll ── */
+    ::-webkit-scrollbar { width: 6px; }
+    ::-webkit-scrollbar-track { background: transparent; }
+    ::-webkit-scrollbar-thumb { background: #3a3a3c; border-radius: 3px; }
+  </style>
+</head>
+<body>
+  <h1>Grammar Engine</h1>
+  <div class="section">
+    <div class="radio-group" id="engineGroup">
+      <label class="radio-item">
+        <input type="radio" name="engine" value="local">
+        <span class="radio-label">
+          <span class="radio-title">Local LLM — Qwen 2.5 1.5B</span>
+          <span class="radio-desc">Free, offline, private. ~1.2 GB download.</span>
+        </span>
+      </label>
+      <label class="radio-item">
+        <input type="radio" name="engine" value="gemini">
+        <span class="radio-label">
+          <span class="radio-title">Gemini API — gemini-2.5-flash-lite</span>
+          <span class="radio-desc">Cloud-based, user-provided API key. Free tier available.</span>
+        </span>
+      </label>
+    </div>
+
+    <div class="apikey-row" id="apikeyRow">
+      <input type="password" id="apikeyInput" placeholder="Enter your Gemini API key">
+      <button id="saveKeyBtn">Save <span class="saved-indicator" id="savedIndicator">✓</span></button>
+    </div>
+  </div>
+
+  <div class="divider"></div>
+
+  <h1>Models</h1>
+  <div class="section" id="modelsSection">
+    <div class="model-row" id="whisperRow">
+      <div class="model-info">
+        <span class="model-name">Whisper base.en <span class="requirement-badge mandatory">Required</span></span>
+        <span class="model-size">Speech-to-text · 142 MB</span>
+        <span class="model-hint">Mandatory. Converts your voice to text for all modes.</span>
+      </div>
+      <div class="model-status" id="whisperStatus"></div>
+    </div>
+    <div class="model-row" id="qwenRow">
+      <div class="model-info">
+        <span class="model-name">Qwen 2.5 1.5B Instruct <span class="requirement-badge optional">Optional</span></span>
+        <span class="model-size">Grammar correction · 1.2 GB</span>
+        <span class="model-hint">Only needed for local grammar mode. Skip if using Gemini API.</span>
+      </div>
+      <div class="model-status" id="qwenStatus"></div>
+    </div>
+
+    <div class="progress-wrap" id="progressWrap" style="display:none">
+      <div class="progress-bar">
+        <div class="progress-fill" id="progressFill"></div>
+      </div>
+      <div class="progress-label" id="progressLabel"></div>
+    </div>
+  </div>
+
+  <div class="divider"></div>
+
+  <h1>About</h1>
+  <div class="section about-text">
+    <p><strong>EcoVoice</strong> v0.1.0</p>
+    <p>100% private, serverless speech-to-text with local grammar polish for macOS.</p>
+    <p>Built with Electron · Whisper · Qwen · Gemini</p>
+  </div>
+
+  <script>
+    (() => {
+      const engineRadios = document.querySelectorAll('input[name="engine"]');
+      const apikeyRow = document.getElementById("apikeyRow");
+      const apikeyInput = document.getElementById("apikeyInput");
+      const saveKeyBtn = document.getElementById("saveKeyBtn");
+      const savedIndicator = document.getElementById("savedIndicator");
+      const progressWrap = document.getElementById("progressWrap");
+      const progressFill = document.getElementById("progressFill");
+      const progressLabel = document.getElementById("progressLabel");
+
+      let currentConfig = {};
+      let downloading = null;
+
+      function fmtBytes(b) {
+        if (b >= 1_000_000_000) return (b / 1_000_000_000).toFixed(1) + " GB";
+        if (b >= 1_000_000) return (b / 1_000_000).toFixed(0) + " MB";
+        return (b / 1_000).toFixed(0) + " KB";
+      }
+
+      function renderModelStatus(modelKey, downloaded) {
+        const statusEl = document.getElementById(modelKey + "Status");
+        if (downloaded) {
+          statusEl.innerHTML = '<span class="status-downloaded">Installed</span>';
+        } else {
+          statusEl.innerHTML = `<button class="download-btn" id="dl-${modelKey}" ${downloading ? "disabled" : ""}>Download</button>`;
+          const btn = document.getElementById("dl-" + modelKey);
+          if (btn && !downloading) {
+            btn.addEventListener("click", () => startDownload(modelKey, btn));
+          }
+        }
+      }
+
+      async function startDownload(modelKey, btn) {
+        downloading = modelKey;
+        btn.classList.add("downloading");
+        btn.textContent = "Connecting...";
+        progressWrap.style.display = "block";
+        progressFill.style.width = "0%";
+        progressLabel.textContent = "";
+
+        document.querySelectorAll(".download-btn").forEach(b => { b.disabled = true; });
+
+        const cleanup = window.ecoVoiceSettings.onDownloadProgress((p) => {
+          if (p.model !== modelKey) return;
+          progressFill.style.width = p.percent + "%";
+          progressLabel.textContent = fmtBytes(p.bytesDownloaded) + " / " + fmtBytes(p.totalBytes);
+
+          if (p.phase === "complete") {
+            btn.classList.remove("downloading");
+            btn.textContent = "Download";
+            downloading = null;
+            progressWrap.style.display = "none";
+            document.querySelectorAll(".download-btn").forEach(b => { b.disabled = false; });
+            renderModelStatus(modelKey, true);
+            cleanup();
+          }
+        });
+
+        try {
+          await window.ecoVoiceSettings.downloadModel(modelKey);
+        } catch (err) {
+          btn.classList.remove("downloading");
+          btn.textContent = "Retry";
+          btn.disabled = false;
+          progressLabel.textContent = "Failed: " + err.message;
+          downloading = null;
+          cleanup();
+        }
+      }
+
+      function saveApiKey() {
+        const key = apikeyInput.value.trim();
+        currentConfig.geminiApiKey = key;
+        window.ecoVoiceSettings.saveConfig(currentConfig);
+        savedIndicator.classList.add("show");
+        setTimeout(() => savedIndicator.classList.remove("show"), 1500);
+      }
+
+      async function init() {
+        currentConfig = await window.ecoVoiceSettings.getConfig();
+
+        // Set radio
+        const engine = currentConfig.grammarEngine || "local";
+        document.querySelector(`input[name="engine"][value="${engine}"]`).checked = true;
+        apikeyRow.classList.toggle("visible", engine === "gemini");
+
+        // Set API key
+        if (currentConfig.geminiApiKey) {
+          apikeyInput.value = currentConfig.geminiApiKey;
+        }
+
+        // Model status
+        const status = await window.ecoVoiceSettings.getModelStatus();
+        renderModelStatus("whisper", status.whisper);
+        renderModelStatus("qwen", status.qwen);
+
+        // Events
+        engineRadios.forEach(r => {
+          r.addEventListener("change", () => {
+            currentConfig.grammarEngine = r.value;
+            apikeyRow.classList.toggle("visible", r.value === "gemini");
+            window.ecoVoiceSettings.saveConfig(currentConfig);
+          });
+        });
+
+        saveKeyBtn.addEventListener("click", saveApiKey);
+        apikeyInput.addEventListener("keydown", (e) => {
+          if (e.key === "Enter") saveApiKey();
+        });
+      }
+
+      init();
+    })();
+  </script>
+</body>
+</html>

@@ -5,12 +5,19 @@ import os from "os";
 import { execFile } from "child_process";
 import { fileURLToPath } from "url";
 import whisperModule from "whisper-node";
+import { loadConfig, saveConfig, getModelsPath } from "./config.js";
+import { createGrammarEngine } from "./grammar-engine.js";
+import { isModelDownloaded, downloadModel } from "./model-downloader.js";
 
 const whisper = whisperModule.whisper;
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
 let overlay = null;
+let settingsWindow = null;
 let recordingState = "idle";
+let polishMode = false;
+let grammarEngine = null;
+let appConfig = null;
 
 function hideAndReset() {
   recordingState = "idle";
@@ -41,9 +48,9 @@ function createOverlay() {
   const { width: screenWidth } = screen.getPrimaryDisplay().workAreaSize;
 
   overlay = new BrowserWindow({
-    width: 320,
+    width: 340,
     height: 100,
-    x: Math.round((screenWidth - 320) / 2),
+    x: Math.round((screenWidth - 340) / 2),
     y: 120,
     frame: false,
     alwaysOnTop: true,
@@ -65,6 +72,35 @@ function createOverlay() {
 
   overlay.on("close", () => {
     overlay = null;
+  });
+}
+
+function createSettingsWindow() {
+  if (settingsWindow && !settingsWindow.isDestroyed()) {
+    settingsWindow.show();
+    settingsWindow.focus();
+    return;
+  }
+
+  settingsWindow = new BrowserWindow({
+    width: 500,
+    height: 540,
+    resizable: false,
+    titleBarStyle: "hiddenInset",
+    webPreferences: {
+      nodeIntegration: false,
+      contextIsolation: true,
+      preload: path.join(__dirname, "settings-preload.cjs")
+    }
+  });
+
+  settingsWindow.loadFile("settings.html");
+
+  settingsWindow.on("close", (e) => {
+    if (!app.isQuitting) {
+      e.preventDefault();
+      settingsWindow.hide();
+    }
   });
 }
 
@@ -99,19 +135,9 @@ function convertWebmToWav(inputPath, outputPath) {
   });
 }
 
-app.whenReady().then(async () => {
-  createOverlay();
+// ── Setup IPC handlers ──────────────────────────────────
 
-  const registered = globalShortcut.register("Alt+Space", () => {
-    toggleRecording();
-  });
-
-  if (!registered) {
-    console.error("Failed to register global shortcut Alt+Space");
-  }
-
-  console.log("EcoVoice ready. Press Option+Space to toggle recording.");
-
+function setupIpcHandlers() {
   ipcMain.handle("get-audio-state", () => recordingState);
 
   ipcMain.handle("close-overlay", () => {
@@ -120,6 +146,12 @@ app.whenReady().then(async () => {
 
   ipcMain.handle("recording-complete", () => {
     hideAndReset();
+  });
+
+  ipcMain.handle("get-polish-mode", () => polishMode);
+
+  ipcMain.handle("set-polish-mode", (_event, enabled) => {
+    polishMode = !!enabled;
   });
 
   ipcMain.handle("transcribe", async (_event, audioBuffer) => {
@@ -131,24 +163,45 @@ app.whenReady().then(async () => {
       await fs.writeFile(webmPath, Buffer.from(audioBuffer));
       await convertWebmToWav(webmPath, wavPath);
 
-      const start = Date.now();
-      const result = await whisper(wavPath, { modelName: "base.en" });
+      const asrStart = Date.now();
+      const whisperModelPath = path.join(getModelsPath(), "ggml-base.en.bin");
+      const result = await whisper(wavPath, { modelPath: whisperModelPath });
+      const asrElapsed = (Date.now() - asrStart) / 1000;
 
-      const elapsed = (Date.now() - start) / 1000;
-      const text = Array.isArray(result) ? result.map(s => s.speech.trim()).join(" ") : String(result);
+      const rawText = Array.isArray(result)
+        ? result.map(s => s.speech.trim()).join(" ")
+        : String(result);
+
+      let finalText = rawText;
+
+      if (polishMode && grammarEngine) {
+        try {
+          const polishStart = Date.now();
+          finalText = await grammarEngine.polish(rawText);
+          const polishElapsed = (Date.now() - polishStart) / 1000;
+
+          hideAndReset();
+
+          try { await injectText(finalText); } catch { /* clipboard fallback */ }
+
+          console.log(`[${asrElapsed.toFixed(2)}s ASR + ${polishElapsed.toFixed(2)}s polish] ${finalText}`);
+          overlay.webContents.send("transcribe-result", { text: finalText, raw: rawText, mode: "polish" });
+
+          return { success: true, text: finalText, raw: rawText, mode: "polish", asrElapsed, polishElapsed };
+        } catch (polishErr) {
+          console.error("[Polish] Error — falling back to raw text:", polishErr.message);
+          finalText = rawText;
+        }
+      }
 
       hideAndReset();
 
-      try {
-        await injectText(text);
-      } catch {
-        // Text already on clipboard — user can Cmd+V manually
-      }
+      try { await injectText(finalText); } catch { /* clipboard fallback */ }
 
-      console.log(`[${elapsed.toFixed(2)}s] ${text}`);
-      overlay.webContents.send("transcribe-result", { text });
+      console.log(`[${asrElapsed.toFixed(2)}s ASR] ${finalText}`);
+      overlay.webContents.send("transcribe-result", { text: finalText, raw: rawText, mode: polishMode ? "polish" : "raw" });
 
-      return { success: true, text, elapsed };
+      return { success: true, text: finalText, raw: rawText, mode: polishMode ? "polish" : "raw", asrElapsed };
     } catch (err) {
       console.error("[Transcribe] Error:", err.message);
       hideAndReset();
@@ -159,6 +212,87 @@ app.whenReady().then(async () => {
       await fs.unlink(wavPath).catch(() => {});
     }
   });
+
+  // ── Settings IPC ──
+
+  ipcMain.handle("settings-get-config", async () => {
+    return loadConfig();
+  });
+
+  ipcMain.handle("settings-save-config", async (_event, config) => {
+    await saveConfig(config);
+    appConfig = config;
+
+    // Reload grammar engine with new config
+    grammarEngine = await createGrammarEngine(appConfig);
+    return { success: true };
+  });
+
+  ipcMain.handle("settings-get-model-status", () => {
+    return {
+      whisper: isModelDownloaded("whisper"),
+      qwen: isModelDownloaded("qwen")
+    };
+  });
+
+  ipcMain.handle("settings-download-model", async (event, modelKey) => {
+    try {
+      await downloadModel(modelKey, (progress) => {
+        if (settingsWindow && !settingsWindow.isDestroyed()) {
+          settingsWindow.webContents.send("settings-download-progress", progress);
+        }
+      });
+      return { success: true };
+    } catch (err) {
+      return { success: false, error: err.message };
+    }
+  });
+}
+
+// ── App lifecycle ────────────────────────────────────────
+
+app.whenReady().then(async () => {
+  appConfig = await loadConfig();
+
+  createOverlay();
+  createSettingsWindow();
+
+  setupIpcHandlers();
+
+  // Init grammar engine
+  grammarEngine = await createGrammarEngine(appConfig);
+
+  const registered = globalShortcut.register("Alt+Space", () => {
+    toggleRecording();
+  });
+
+  if (!registered) {
+    console.error("Failed to register global shortcut Alt+Space");
+  }
+
+  console.log("EcoVoice ready. Press Option+Space to toggle recording.");
+  console.log(`  Grammar engine: ${appConfig.grammarEngine}`);
+  console.log(`  Whisper model: ${isModelDownloaded("whisper") ? "downloaded" : "missing"}`);
+  console.log(`  Qwen model: ${isModelDownloaded("qwen") ? "downloaded" : "missing"}`);
+
+  // First-run: show settings
+  if (!appConfig.setupComplete) {
+    settingsWindow.show();
+    settingsWindow.focus();
+  }
+});
+
+app.on("activate", () => {
+  if (settingsWindow && !settingsWindow.isDestroyed()) {
+    settingsWindow.show();
+    settingsWindow.focus();
+  } else {
+    createSettingsWindow();
+  }
+});
+
+app.on("before-quit", () => {
+  app.isQuitting = true;
 });
 
 app.on("will-quit", () => {
@@ -166,5 +300,5 @@ app.on("will-quit", () => {
 });
 
 app.on("window-all-closed", () => {
-  app.quit();
+  // Don't quit — macOS convention for background apps
 });

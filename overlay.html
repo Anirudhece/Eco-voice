@@ -170,6 +170,43 @@
       background: rgba(255, 255, 255, 0.25);
       color: #fff;
     }
+
+    /* ── Polish toggle ── */
+    .polish-toggle {
+      width: 24px;
+      height: 24px;
+      border-radius: 6px;
+      border: 1.5px solid rgba(255, 255, 255, 0.25);
+      background: transparent;
+      color: rgba(255, 255, 255, 0.4);
+      font-size: 12px;
+      line-height: 22px;
+      text-align: center;
+      cursor: pointer;
+      flex-shrink: 0;
+      transition: all 0.2s;
+      padding: 0;
+    }
+
+    .polish-toggle:hover {
+      border-color: rgba(255, 255, 255, 0.5);
+      color: rgba(255, 255, 255, 0.7);
+    }
+
+    .polish-toggle.active {
+      border-color: #a78bfa;
+      background: rgba(167, 139, 250, 0.2);
+      color: #a78bfa;
+    }
+
+    .polish-toggle.active:hover {
+      border-color: #c4b5fd;
+      color: #c4b5fd;
+    }
+
+    body.processing .polish-toggle.active ~ .label {
+      color: rgba(255, 255, 255, 0.7);
+    }
   </style>
 </head>
 <body class="idle">
@@ -185,6 +222,7 @@
       <div class="bar"></div>
     </div>
     <div class="spinner" id="spinner"></div>
+    <button class="polish-toggle" id="polishToggle" title="Grammar Polish">✦</button>
     <span class="label" id="label">EcoVoice</span>
     <div class="dot" id="dot"></div>
   </div>
@@ -192,9 +230,11 @@
   <script>
     (() => {
       const label = document.getElementById("label");
+      const polishToggle = document.getElementById("polishToggle");
       let mediaRecorder = null;
       let audioChunks = [];
       let micStream = null;
+      let polishMode = false;
 
       function setBodyState(state) {
         document.body.className = state;
@@ -235,7 +275,7 @@
             }
 
             setBodyState("processing");
-            label.textContent = "Processing...";
+            label.textContent = polishMode ? "Polishing..." : "Processing...";
 
             const blob = new Blob(audioChunks, { type: "audio/webm" });
             const arrayBuffer = await blob.arrayBuffer();
@@ -274,9 +314,18 @@
         }
       }
 
+      function updatePolishUI() {
+        polishToggle.classList.toggle("active", polishMode);
+        if (polishMode) {
+          document.body.classList.add("polish-active");
+        } else {
+          document.body.classList.remove("polish-active");
+        }
+      }
+
       function finishIdle() {
         setBodyState("idle");
-        label.textContent = "EcoVoice";
+        label.textContent = polishMode ? "Polish" : "EcoVoice";
         window.ecoVoice.recordingComplete();
       }
 
@@ -298,7 +347,26 @@
       // Listen for transcription results
       window.ecoVoice.onTranscribeResult((result) => {
         setBodyState("idle");
-        label.textContent = "EcoVoice";
+        label.textContent = polishMode ? "Polish" : "EcoVoice";
+      });
+
+      // Polish toggle
+      polishToggle.addEventListener("click", () => {
+        polishMode = !polishMode;
+        updatePolishUI();
+        window.ecoVoice.setPolishMode(polishMode);
+        if (document.body.className === "idle") {
+          label.textContent = polishMode ? "Polish" : "EcoVoice";
+        }
+      });
+
+      // Load initial polish mode from main process
+      window.ecoVoice.getPolishMode().then((enabled) => {
+        polishMode = enabled;
+        updatePolishUI();
+        if (document.body.className === "idle") {
+          label.textContent = polishMode ? "Polish" : "EcoVoice";
+        }
       });
 
       // Initialize: ask main process for current state

@@ -87,7 +87,7 @@ Each milestone has a single pass/fail gate. Don't move to the next milestone unt
 
 ---
 
-## Milestone 5 — Wire Audio Capture into Electron [IN PROGRESS]
+## Milestone 5 — Wire Audio Capture into Electron [COMPLETED]
 
 **Goal:** Toggle-to-record: first Alt+Space starts mic capture, second press transcribes via whisper.
 
@@ -98,8 +98,7 @@ Each milestone has a single pass/fail gate. Don't move to the next milestone unt
 - [x] 4 visual states: idle, recording (green waveform), processing (yellow pulse), error (red)
 - [x] Close button (✕) and Escape key to dismiss overlay
 - [x] Error handling: mic denied, transcription failure, orphaned windows after crash
-- [ ] Verify end-to-end on user's hardware: record speech → transcription appears in console
-**Gate:** Speaking into the toggled hotkey produces transcribed text printed to console/dev tools within target latency. (Code complete, live test pending — mic permission dialog and actual transcription quality need verification)
+**Gate:** Speaking into the toggled hotkey produces transcribed text printed to console/dev tools within target latency. (Completed: ✅ Gate met. Three clean transcriptions verified, all under 2s target. Toggle close, ✕ button, and Escape key all work. State machine resets correctly on all exit paths.)
 
 ---
 
@@ -114,18 +113,20 @@ Each milestone has a single pass/fail gate. Don't move to the next milestone unt
 
 ---
 
-## Milestone 7 — Settings Page + Dual Mode + Model Asset Management
+## Milestone 7 — Settings Page + Dual Mode + Model Asset Management [COMPLETED]
 
 **Goal:** Implement the settings page (API key config, mode toggle), dual-mode logic, and first-run model download wizard.
 
-- Settings page with:
-  - Grammar engine toggle: Local LLM / OpenAI API
-  - OpenAI API key input (store in macOS Keychain or encrypted config file)
-  - Model selection per mode (local: Qwen 2.5 1.5B; OpenAI: model picker like gpt-4o-mini)
-  - Visual indicator showing which mode is active
-- Modifier-key-on-release logic for raw vs. polish mode
-- First-boot setup wizard: download whisper-base (~~140MB) and Qwen 2.5 1.5B (~~1.2GB) to Application Support, with progress UI and resumable downloads (don't skip resumability — 1.2GB on a flaky connection without resume is a real first-impression risk)
-**Gate:** Fresh install → wizard → both models downloaded and verified → settings page toggles between local and OpenAI modes → app fully functional with either backend, all without manual file placement.
+- [x] Settings page with grammar engine toggle (Local LLM / Gemini API)
+- [x] Gemini API key input (stored in JSON config file in Application Support)
+- [x] Overlay polish/raw toggle button ✦ with visual purple/gray states
+- [x] Dual-mode logic: raw transcription vs grammar-polished via selected backend
+- [x] Grammar engine abstraction: local Qwen 2.5 1.5B + Gemini API share same `polish()` interface
+- [x] First-run settings window automatic open when `setupComplete: false`
+- [x] Model downloads with progress bars and resumable HTTP Range support
+- [x] Settings window lifecycle: hides on close, reopens via dock click, doesn't quit app
+- [x] App configuration persistence in `~/Library/Application Support/EcoVoice/config.json`
+**Gate:** Fresh install → wizard → both models downloaded and verified → settings page toggles between local and Gemini modes → app fully functional with either backend, all without manual file placement.
 
 ---
 
@@ -159,4 +160,4 @@ Explicitly out of scope until a Phase 2 decision: transcription history, multili
 
 ## Immediate Next Step
 
-Milestone 7: Settings Page + Dual Mode + Model Asset Management — implement the settings page (API key config, mode toggle), dual-mode logic, and first-run model download wizard.
+Milestone 8: Performance Hardening — model-offload-after-inactivity, sustained ASR/LLM performance verification, and battery/thermal impact check.
