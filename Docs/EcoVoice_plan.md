@@ -130,14 +130,19 @@ Each milestone has a single pass/fail gate. Don't move to the next milestone unt
 
 ---
 
-## Milestone 8 — Performance Hardening
+## Milestone 8 — Packaging + Performance Hardening
 
-**Goal:** Get reasonable real-world performance, with the idle RAM target treated as aspirational rather than a hard gate (see stack decision above — Electron's baseline footprint makes the PRD's original <40MB idle target unrealistic).
+**Goal:** Bundle EcoVoice into a standalone `.app`/`.dmg` and verify performance in the packaged runtime.
 
-- Implement model-offload-after-5-minutes-inactive logic anyway — it's still good practice and meaningfully reduces idle RAM even if it won't hit the original 40MB number
-- Confirm ASR/LLM speed targets still hold when the app has been running a while (memory fragmentation, thermal throttling on sustained use)
-- Battery/thermal impact check on a longer session (PRD doesn't specify this but it's a real desktop-app concern Apple Silicon users will notice)
-**Gate:** App sustains ASR/LLM performance targets through a 30+ minute real session, and idle RAM is meaningfully reduced by the offload logic versus an always-loaded baseline (exact number not a hard gate).
+- [ ] Bundle whisper base.en model (142MB) inside the `.dmg` via `extraResources` — copy to Application Support on first launch, no download needed for mandatory model
+- [ ] Add `electron-builder` config: macOS `.dmg` target, ad-hoc signing, ASAR unpack for native modules
+- [ ] Bundle `@ffmpeg-installer/ffmpeg` — replace system ffmpeg dependency
+- [ ] Migrate to `app.getPath('userData')` for config/models path resolution
+- [ ] App icon (`assets/icon.png`) and basic branding
+- [ ] Implement model-offload-after-5-minutes-inactive logic — dispose Qwen context, reload on next polish
+- [ ] Verify ASR/LLM speed targets in packaged build (3–5 real recordings)
+- [ ] Test full flow: download models in packaged app → transcription → polish (local + gemini) → settings persist
+**Gate:** `.dmg` build succeeds, app launches standalone (no terminal), transcription and polish work in packaged runtime, model offload frees GPU RAM on idle.
 
 ---
 
@@ -160,4 +165,4 @@ Explicitly out of scope until a Phase 2 decision: transcription history, multili
 
 ## Immediate Next Step
 
-Milestone 8: Performance Hardening — model-offload-after-inactivity, sustained ASR/LLM performance verification, and battery/thermal impact check.
+Milestone 8: Packaging + Performance Hardening — bundle into standalone `.dmg`, replace system ffmpeg, add model offload, verify performance in packaged runtime.
