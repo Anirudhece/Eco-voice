@@ -197,6 +197,26 @@
       color: #4ade80;
     }
 
+    .delete-btn {
+      background: transparent;
+      border: 1px solid rgba(239, 68, 68, 0.4);
+      border-radius: 6px;
+      padding: 4px 10px;
+      font-size: 11px;
+      color: #ef4444;
+      cursor: pointer;
+      white-space: nowrap;
+      transition: background 0.15s, border-color 0.15s, color 0.15s;
+    }
+    .delete-btn:hover:not(:disabled) {
+      background: rgba(239, 68, 68, 0.1);
+      border-color: #ef4444;
+    }
+    .delete-btn:disabled {
+      opacity: 0.5;
+      cursor: default;
+    }
+
     /* ── Progress bar ── */
     .progress-wrap {
       width: 100%;
@@ -331,10 +351,29 @@
         return (b / 1_000).toFixed(0) + " KB";
       }
 
+      async function refreshAllModelStatuses() {
+        const status = await window.ecoVoiceSettings.getModelStatus();
+        renderModelStatus("whisper", status.whisper);
+        renderModelStatus("qwen", status.qwen);
+      }
+
       function renderModelStatus(modelKey, downloaded) {
         const statusEl = document.getElementById(modelKey + "Status");
         if (downloaded) {
-          statusEl.innerHTML = '<span class="status-downloaded">Installed</span>';
+          statusEl.innerHTML = `
+            <span class="status-downloaded">Installed</span>
+            <button class="delete-btn" id="del-${modelKey}">Delete</button>
+          `;
+          const delBtn = document.getElementById("del-" + modelKey);
+          if (delBtn) {
+            delBtn.addEventListener("click", () => confirmAndDeleteModel(modelKey, delBtn));
+          }
+        } else if (downloading === modelKey) {
+          statusEl.innerHTML = `<button class="delete-btn" id="cancel-${modelKey}" style="color: #ff9f0a; border-color: rgba(255, 159, 10, 0.4);">Cancel</button>`;
+          const cancelBtn = document.getElementById("cancel-" + modelKey);
+          if (cancelBtn) {
+            cancelBtn.addEventListener("click", () => cancelActiveDownload(modelKey));
+          }
         } else {
           statusEl.innerHTML = `<button class="download-btn" id="dl-${modelKey}" ${downloading ? "disabled" : ""}>Download</button>`;
           const btn = document.getElementById("dl-" + modelKey);
@@ -344,40 +383,95 @@
         }
       }
 
+      let deleteTimeout = null;
+      async function confirmAndDeleteModel(modelKey, delBtn) {
+        if (delBtn.textContent === "Delete") {
+          delBtn.textContent = "Confirm?";
+          delBtn.style.color = "#ff3b30";
+          delBtn.style.borderColor = "#ff3b30";
+          deleteTimeout = setTimeout(() => {
+            delBtn.textContent = "Delete";
+            delBtn.style.color = "#ef4444";
+            delBtn.style.borderColor = "rgba(239, 68, 68, 0.4)";
+          }, 3000);
+        } else {
+          clearTimeout(deleteTimeout);
+          delBtn.disabled = true;
+          delBtn.textContent = "Deleting...";
+          try {
+            await window.ecoVoiceSettings.deleteModel(modelKey);
+            await refreshAllModelStatuses();
+          } catch (err) {
+            delBtn.textContent = "Error";
+            setTimeout(() => {
+              delBtn.disabled = false;
+              delBtn.textContent = "Delete";
+              delBtn.style.color = "#ef4444";
+              delBtn.style.borderColor = "rgba(239, 68, 68, 0.4)";
+            }, 2000);
+          }
+        }
+      }
+
+      async function cancelActiveDownload(modelKey) {
+        const btn = document.getElementById("cancel-" + modelKey);
+        if (btn) {
+          btn.disabled = true;
+          btn.textContent = "Cancelling...";
+        }
+        await window.ecoVoiceSettings.cancelDownload(modelKey);
+      }
+
       async function startDownload(modelKey, btn) {
         downloading = modelKey;
-        btn.classList.add("downloading");
-        btn.textContent = "Connecting...";
+        await refreshAllModelStatuses();
+
         progressWrap.style.display = "block";
         progressFill.style.width = "0%";
-        progressLabel.textContent = "";
-
-        document.querySelectorAll(".download-btn").forEach(b => { b.disabled = true; });
+        progressLabel.textContent = "Connecting...";
+        progressLabel.style.color = "#8e8e93";
 
         const cleanup = window.ecoVoiceSettings.onDownloadProgress((p) => {
           if (p.model !== modelKey) return;
           progressFill.style.width = p.percent + "%";
-          progressLabel.textContent = fmtBytes(p.bytesDownloaded) + " / " + fmtBytes(p.totalBytes);
+          
+          let labelText = "";
+          if (p.phase === "connecting") {
+            labelText = "Connecting...";
+          } else if (p.phase === "retrying") {
+            labelText = "Connection lost, retrying...";
+          } else if (p.phase === "stalled") {
+            labelText = "Connection stalled, retrying...";
+          } else {
+            labelText = fmtBytes(p.bytesDownloaded) + " / " + fmtBytes(p.totalBytes);
+          }
+          progressLabel.textContent = labelText;
 
           if (p.phase === "complete") {
-            btn.classList.remove("downloading");
-            btn.textContent = "Download";
             downloading = null;
             progressWrap.style.display = "none";
-            document.querySelectorAll(".download-btn").forEach(b => { b.disabled = false; });
-            renderModelStatus(modelKey, true);
+            refreshAllModelStatuses();
             cleanup();
           }
         });
 
         try {
-          await window.ecoVoiceSettings.downloadModel(modelKey);
+          const result = await window.ecoVoiceSettings.downloadModel(modelKey);
+          if (!result.success) {
+            throw new Error(result.error);
+          }
         } catch (err) {
-          btn.classList.remove("downloading");
-          btn.textContent = "Retry";
-          btn.disabled = false;
-          progressLabel.textContent = "Failed: " + err.message;
+          const isAbort = err.message === "Aborted" || err.message === "Download aborted";
           downloading = null;
+          progressWrap.style.display = "none";
+          await refreshAllModelStatuses();
+
+          if (!isAbort) {
+            progressWrap.style.display = "block";
+            progressFill.style.width = "0%";
+            progressLabel.textContent = "Failed: " + err.message;
+            progressLabel.style.color = "#ef4444";
+          }
           cleanup();
         }
       }
@@ -404,9 +498,7 @@
         }
 
         // Model status
-        const status = await window.ecoVoiceSettings.getModelStatus();
-        renderModelStatus("whisper", status.whisper);
-        renderModelStatus("qwen", status.qwen);
+        await refreshAllModelStatuses();
 
         // Events
         engineRadios.forEach(r => {

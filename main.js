@@ -7,7 +7,7 @@ import { fileURLToPath } from "url";
 import whisperModule from "whisper-node";
 import { loadConfig, saveConfig, getModelsPath } from "./config.js";
 import { createGrammarEngine } from "./grammar-engine.js";
-import { isModelDownloaded, downloadModel } from "./model-downloader.js";
+import { isModelDownloaded, downloadModel, abortDownload, deleteModel } from "./model-downloader.js";
 
 const whisper = whisperModule.whisper;
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
@@ -237,12 +237,44 @@ function setupIpcHandlers() {
 
   ipcMain.handle("settings-download-model", async (event, modelKey) => {
     try {
+      console.log(`[IPC] Starting download for ${modelKey}`);
       await downloadModel(modelKey, (progress) => {
         if (settingsWindow && !settingsWindow.isDestroyed()) {
           settingsWindow.webContents.send("settings-download-progress", progress);
         }
       });
+      console.log(`[IPC] Download for ${modelKey} finished successfully`);
       return { success: true };
+    } catch (err) {
+      console.log(`[IPC] Download for ${modelKey} failed: ${err.message}`);
+      return { success: false, error: err.message };
+    }
+  });
+
+  ipcMain.handle("settings-cancel-download", async (_event, modelKey) => {
+    try {
+      console.log(`[IPC] Cancelling download for ${modelKey}`);
+      const result = abortDownload(modelKey);
+      console.log(`[IPC] Cancel result for ${modelKey}: ${result}`);
+      return { success: result };
+    } catch (err) {
+      console.log(`[IPC] Cancel failed for ${modelKey}: ${err.message}`);
+      return { success: false, error: err.message };
+    }
+  });
+
+  ipcMain.handle("settings-delete-model", async (_event, modelKey) => {
+    try {
+      if (modelKey === "qwen") {
+        grammarEngine = {
+          polish: async (rawText) => {
+            console.warn("[Grammar] Local model not downloaded — returning raw text");
+            return rawText;
+          }
+        };
+      }
+      const result = await deleteModel(modelKey);
+      return { success: result };
     } catch (err) {
       return { success: false, error: err.message };
     }

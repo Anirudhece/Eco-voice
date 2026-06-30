@@ -13,5 +13,9 @@ contextBridge.exposeInMainWorld("ecoVoiceSettings", {
     return () => ipcRenderer.removeListener("settings-download-progress", handler);
   },
 
+  cancelDownload: (modelKey) => ipcRenderer.invoke("settings-cancel-download", modelKey),
+
+  deleteModel: (modelKey) => ipcRenderer.invoke("settings-delete-model", modelKey),
+
   getModelStatus: () => ipcRenderer.invoke("settings-get-model-status")
 });
