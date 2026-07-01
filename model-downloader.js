@@ -15,7 +15,7 @@ const MODELS = {
     name: "Qwen 2.5 1.5B Instruct (Grammar)",
     url: "https://huggingface.co/bartowski/Qwen2.5-1.5B-Instruct-GGUF/resolve/main/Qwen2.5-1.5B-Instruct-Q4_K_M.gguf",
     filename: "Qwen2.5-1.5B-Instruct-Q4_K_M.gguf",
-    size: 1_280_000_000
+    size: 986_048_768
   }
 };
 
@@ -45,54 +45,61 @@ export function getPartialBytes(modelKey) {
 
 const activeDownloads = {};
 
-function requestWithRedirect(method, url, rangeStart, options = {}) {
+function resolveCdnUrl(modelUrl) {
   return new Promise((resolve, reject) => {
-    let req;
-    const doRequest = (target, redirectsLeft) => {
+    const doFollow = (target, redirectsLeft) => {
       const parsed = new URL(target);
       const lib = parsed.protocol === "https:" ? https : http;
 
-      const opts = {
-        method,
-        hostname: parsed.hostname,
-        path: parsed.pathname + parsed.search,
-        headers: {}
-      };
-
-      if (rangeStart > 0) {
-        opts.headers.Range = `bytes=${rangeStart}-`;
-      }
-
-      req = lib.request(opts, (res) => {
+      const req = lib.request({ method: "HEAD", hostname: parsed.hostname, path: parsed.pathname + parsed.search }, (res) => {
         if (res.statusCode >= 300 && res.statusCode < 400 && res.headers.location && redirectsLeft > 0) {
-          doRequest(res.headers.location, redirectsLeft - 1);
-        } else if (res.statusCode === 206 || res.statusCode === 200) {
-          const contentRange = res.headers["content-range"];
-          let totalFromServer = parseInt(res.headers["content-length"] || "0", 10);
-          if (contentRange) {
-            const match = contentRange.match(/\/(\d+)/);
-            if (match) totalFromServer = parseInt(match[1], 10);
-          }
-          resolve({ stream: res, serverSize: totalFromServer, req });
+          doFollow(new URL(res.headers.location, target).href, redirectsLeft - 1);
         } else {
-          reject(new Error(`HTTP ${res.statusCode}`));
+          resolve(target);
         }
       });
-
-      if (options.timeout) {
-        req.setTimeout(options.timeout, () => {
-          req.destroy(new Error("Connection timeout"));
-        });
-      }
-
       req.on("error", reject);
       req.end();
-
-      if (options.onReqCreated) {
-        options.onReqCreated(req);
-      }
     };
-    doRequest(url, 5);
+    doFollow(modelUrl, 10);
+  });
+}
+
+function streamFromUrl(cdnUrl, rangeStart, options = {}) {
+  return new Promise((resolve, reject) => {
+    const parsed = new URL(cdnUrl);
+    const opts = {
+      method: "GET",
+      hostname: parsed.hostname,
+      path: parsed.pathname + parsed.search,
+      headers: {}
+    };
+
+    if (rangeStart > 0) {
+      opts.headers.Range = `bytes=${rangeStart}-`;
+    }
+
+    const req = (parsed.protocol === "https:" ? https : http).request(opts, (res) => {
+      if (res.statusCode === 206 || res.statusCode === 200) {
+        const contentRange = res.headers["content-range"];
+        let totalFromServer = parseInt(res.headers["content-length"] || "0", 10);
+        if (contentRange) {
+          const match = contentRange.match(/\/(\d+)/);
+          if (match) totalFromServer = parseInt(match[1], 10);
+        }
+        resolve({ stream: res, serverSize: totalFromServer, req });
+      } else if (res.statusCode === 416) {
+        reject(new Error("HTTP 416 stale partial"));
+      } else {
+        reject(new Error(`HTTP ${res.statusCode}`));
+      }
+    });
+
+    if (options.timeout) {
+      req.setTimeout(options.timeout, () => req.destroy(new Error("Connection timeout")));
+    }
+    req.on("error", reject);
+    req.end();
   });
 }
 
@@ -127,7 +134,7 @@ export async function downloadModel(modelKey, onProgress) {
 
   await ensureModelsDir();
   const filePath = path.join(getModelsPath(), model.filename);
-  const totalSize = model.size;
+  let totalSize = model.size;
 
   if (activeDownloads[modelKey]) {
     throw new Error(`Download already in progress for ${modelKey}`);
@@ -137,186 +144,111 @@ export async function downloadModel(modelKey, onProgress) {
   let currentReq = null;
   let currentStream = null;
   let currentWriteStream = null;
-  let cancelTimerResolve = null;
   let innerReject = null;
-  const cancelTimer = new Promise((_, reject) => {
-    cancelTimerResolve = reject;
-  });
-  cancelTimer.catch(() => {});
 
   const abort = () => {
-    console.log(`[DOWNLOADER] abort() called for ${modelKey}`);
     isAborted = true;
-    if (cancelTimerResolve) {
-      console.log(`[DOWNLOADER] Rejecting cancelTimer`);
-      cancelTimerResolve(new Error("Aborted"));
-    }
-    if (innerReject) {
-      console.log(`[DOWNLOADER] Rejecting innerReject`);
-      try { innerReject(new Error("Aborted")); } catch (e) { console.error(e); }
-    }
-    if (currentReq) {
-      try { currentReq.destroy(); } catch {}
-    }
-    if (currentStream) {
-      try { currentStream.destroy(); } catch {}
-    }
-    if (currentWriteStream) {
-      try { currentWriteStream.destroy(); } catch {}
-    }
+    try { if (innerReject) innerReject(new Error("Aborted")); } catch {}
+    try { if (currentReq) currentReq.destroy(); } catch {}
+    try { if (currentStream) currentStream.destroy(); } catch {}
+    try { if (currentWriteStream) currentWriteStream.destroy(); } catch {}
   };
 
   activeDownloads[modelKey] = { abort };
 
-  const maxRetries = 3;
-  let attempt = 0;
-
   try {
-    while (attempt < maxRetries) {
-      if (isAborted) {
-        throw new Error("Aborted");
-      }
-
-      const partialBytes = getPartialBytes(modelKey);
-      if (partialBytes >= totalSize * 0.95) {
-        onProgress({
-          model: modelKey,
-          bytesDownloaded: totalSize,
-          totalBytes: totalSize,
-          percent: 100,
-          phase: "complete"
-        });
+    const maxAttempts = 5;
+    for (let attempt = 0; attempt < maxAttempts; attempt++) {
+      // Resolve a FRESH CDN URL for each attempt
+      const cdnUrl = await resolveCdnUrl(model.url);
+      const resumeFrom = getPartialBytes(modelKey);
+      if (resumeFrom >= totalSize * 0.95) {
+        onProgress({ model: modelKey, bytesDownloaded: totalSize, totalBytes: totalSize, percent: 100, phase: "complete" });
         delete activeDownloads[modelKey];
         return totalSize;
       }
 
       onProgress({
         model: modelKey,
-        bytesDownloaded: partialBytes,
+        bytesDownloaded: resumeFrom,
         totalBytes: totalSize,
-        percent: Math.round(partialBytes / totalSize * 100),
-        phase: attempt > 0 ? "retrying" : "connecting"
+        percent: Math.round(resumeFrom / totalSize * 100),
+        phase: attempt > 0 ? (resumeFrom > 0 ? "resuming" : "retrying") : "connecting"
       });
 
       try {
-        const { stream, req } = await requestWithRedirect("GET", model.url, partialBytes, {
-          timeout: 30000,
-          onReqCreated: (r) => {
-            currentReq = r;
-          }
-        });
+        const { stream, req, serverSize } = await streamFromUrl(cdnUrl, resumeFrom, { timeout: 60000 });
 
-        currentStream = stream;
-
-        if (isAborted) {
-          throw new Error("Aborted");
+        // Use server-reported size — more accurate than hardcoded constant
+        if (serverSize > 0) {
+          totalSize = serverSize;
         }
 
-        onProgress({
-          model: modelKey,
-          bytesDownloaded: partialBytes,
-          totalBytes: totalSize,
-          percent: Math.round(partialBytes / totalSize * 100),
-          phase: "downloading"
-        });
+        if (isAborted) throw new Error("Aborted");
+
+        currentReq = req;
+        currentStream = stream;
+
+        onProgress({ model: modelKey, bytesDownloaded: resumeFrom, totalBytes: totalSize, percent: Math.round(resumeFrom / totalSize * 100), phase: "downloading" });
 
         await new Promise((resolve, reject) => {
           innerReject = reject;
-          const flags = partialBytes > 0 ? "a" : "w";
+          const flags = resumeFrom > 0 ? "a" : "w";
           currentWriteStream = fs.createWriteStream(filePath, { flags });
-          let downloaded = partialBytes;
-
-          let watchdog;
-          const resetWatchdog = () => {
-            if (watchdog) clearTimeout(watchdog);
-            watchdog = setTimeout(() => {
-              reject(new Error("Stream stalled"));
-            }, 30000);
-          };
-
-          resetWatchdog();
+          let downloaded = resumeFrom;
 
           stream.on("data", (chunk) => {
-            if (isAborted) {
-              reject(new Error("Aborted"));
-              return;
-            }
-            resetWatchdog();
+            if (isAborted) { reject(new Error("Aborted")); return; }
             downloaded += chunk.length;
             const percent = Math.round(Math.min(downloaded / totalSize, 1) * 100);
-            onProgress({
-              model: modelKey,
-              bytesDownloaded: downloaded,
-              totalBytes: totalSize,
-              percent,
-              phase: "downloading"
-            });
+            onProgress({ model: modelKey, bytesDownloaded: downloaded, totalBytes: totalSize, percent, phase: "downloading" });
           });
 
           currentWriteStream.on("finish", () => {
-            if (watchdog) clearTimeout(watchdog);
-            if (isAborted) {
-              reject(new Error("Aborted"));
-            } else if (downloaded < totalSize * 0.95) {
+            if (isAborted) { reject(new Error("Aborted")); return; }
+            if (downloaded < totalSize * 0.95) {
               reject(new Error(`Download incomplete: ${downloaded} / ${totalSize} bytes`));
             } else {
-              onProgress({
-                model: modelKey,
-                bytesDownloaded: downloaded,
-                totalBytes: totalSize,
-                percent: 100,
-                phase: "complete"
-              });
+              onProgress({ model: modelKey, bytesDownloaded: downloaded, totalBytes: totalSize, percent: 100, phase: "complete" });
               resolve(downloaded);
             }
           });
 
-          currentWriteStream.on("error", (err) => {
-            if (watchdog) clearTimeout(watchdog);
-            reject(err);
-          });
-          stream.on("error", (err) => {
-            if (watchdog) clearTimeout(watchdog);
-            reject(err);
-          });
-
+          currentWriteStream.on("error", reject);
+          stream.on("error", reject);
           stream.pipe(currentWriteStream);
         });
 
+        // Success
         delete activeDownloads[modelKey];
         return;
 
       } catch (err) {
-        console.log(`[DOWNLOADER] Inner catch: ${err.message}`);
-        if (isAborted || err.message === "Aborted") {
-          console.log(`[DOWNLOADER] Throwing Aborted from inner catch`);
-          throw new Error("Aborted");
+        if (isAborted || err.message === "Aborted") throw new Error("Aborted");
+
+        if (err.message === "HTTP 416 stale partial") {
+          console.warn(`[DOWNLOADER] 416 on attempt ${attempt} — deleting partial, retrying fresh`);
+          try { fs.unlinkSync(filePath); } catch {}
+          continue;
         }
 
-        attempt++;
-        console.warn(`[Downloader] Attempt ${attempt} failed: ${err.message}`);
-
-        if (attempt >= maxRetries) {
-          throw err;
+        if (err.message.startsWith("Download incomplete")) {
+          const remaining = totalSize - getPartialBytes(modelKey);
+          console.warn(`[DOWNLOADER] Incomplete on attempt ${attempt} — ${Math.round(remaining / 1e6)}MB remaining`);
+          continue;
         }
 
-        const delay = 2000 * Math.pow(2, attempt - 1);
-        onProgress({
-          model: modelKey,
-          bytesDownloaded: getPartialBytes(modelKey),
-          totalBytes: totalSize,
-          percent: Math.round(getPartialBytes(modelKey) / totalSize * 100),
-          phase: "retrying"
-        });
+        if (attempt < maxAttempts - 1) {
+          console.warn(`[DOWNLOADER] ${err.message} on attempt ${attempt} — retrying`);
+          continue;
+        }
 
-        await Promise.race([
-          new Promise((r) => setTimeout(r, delay)),
-          cancelTimer
-        ]);
+        throw err;
       }
     }
+
+    throw new Error(`Download failed after ${maxAttempts} attempts`);
   } catch (err) {
-    console.log(`[DOWNLOADER] Outer catch: ${err.message}`);
     delete activeDownloads[modelKey];
     throw err;
   }

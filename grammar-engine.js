@@ -7,6 +7,7 @@ import { getModelsPath } from "./config.js";
 const SYSTEM_PROMPT = `Rewrite the user's input with correct grammar, spelling, and punctuation. Determine the intended tense from context and keep it consistent. Output only the corrected text.`;
 
 const QWEN_FILENAME = "Qwen2.5-1.5B-Instruct-Q4_K_M.gguf";
+const QWEN_EXPECTED_SIZE = 986_048_768;
 
 export async function createGrammarEngine(config) {
   if (config.grammarEngine === "gemini") {
@@ -18,12 +19,15 @@ export async function createGrammarEngine(config) {
 async function createLocalEngine() {
   const modelPath = path.join(getModelsPath(), QWEN_FILENAME);
 
-  if (!fs.existsSync(modelPath)) {
+  try {
+    const stat = fs.statSync(modelPath);
+    if (stat.size < QWEN_EXPECTED_SIZE * 0.95) {
+      throw new Error(`Incomplete download: ${stat.size} / ${QWEN_EXPECTED_SIZE} bytes`);
+    }
+  } catch (err) {
+    console.warn(`[Grammar] Local model not available (${err.message}) — returning raw text`);
     return {
-      polish: async (rawText) => {
-        console.warn("[Grammar] Local model not downloaded — returning raw text");
-        return rawText;
-      }
+      polish: async (rawText) => rawText
     };
   }
 

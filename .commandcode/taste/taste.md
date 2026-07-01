@@ -2,7 +2,7 @@
 - Document research findings, dead-ends, and benchmark results in `Docs/Research/` using the format `Research_MX_Topic.md` (where MX is the related milestone number), then link back from the milestone file. Include: what was tested, results, issues found, observations, lessons learned, and the decision/reasoning for next steps. Confidence: 0.80
 - Include issues found, observations, and lessons learned within each milestone document so the user can reference them later. Confidence: 0.75
 - Follow the rules defined in .clinerules and .cursorrules files when they exist in the project. Confidence: 0.75
-- Present a written plan before executing code changes — write the plan to a temporary file, show it, then proceed with implementation only after user approval. Confidence: 0.65
+- Present a written plan before executing code changes — show the plan in full, then ask for execution permission. Do not ask to switch modes or request mode permissions without presenting the plan first. Confidence: 0.80
 
 # architecture
 - Use toggle mode (first keypress starts recording, second stops) for audio capture hotkey in EcoVoice, since Electron's `globalShortcut` doesn't support key-release events needed for true hold-to-talk. Confidence: 0.50
