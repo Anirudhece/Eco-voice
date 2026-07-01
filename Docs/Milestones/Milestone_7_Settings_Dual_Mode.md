@@ -157,6 +157,12 @@ Stored at `~/Library/Application Support/EcoVoice/config.json`. Created automati
 
 4. **Gemini API key is stored as plain text in config.json.** This is a conscious tradeoff (see Research M7 doc). The alternatives (macOS Keychain via `keytar`) add native build complexity for a local-only, single-user app where the config file is already protected by macOS filesystem permissions.
 
+5. **Hardcoded model sizes caused phantom "incomplete download" errors.** The Qwen model was hardcoded as 1,280,000,000 bytes (1.28GB) when the actual file on HuggingFace is 986,048,768 bytes (940MB). This caused every download to fail at 986MB with "Download incomplete" — the download was *actually complete*, but the 95% threshold check compared 986MB against 1,216MB. Fixed by using the server-reported `Content-Length`/`Content-Range` size from the CDN response headers instead of hardcoded constants.
+
+6. **HTTP Range headers through CDN redirect chains cause 416 errors.** The original `requestWithRedirect` function sent the `Range` header through HuggingFace's entire redirect chain (resolve/main → Xet bridge → CDN). The CDN sometimes didn't recognize the byte range from the redirected request, returning 416 ("Range Not Satisfiable"). Fixed by separating CDN URL resolution (HEAD request, follow redirects) from data streaming (GET direct to CDN URL, Range header only reaches the CDN).
+
+7. **CDN URL resolution must be fresh per attempt.** Reusing the same resolved CDN URL across retry attempts caused signed-URL expiry issues. Fixed by calling `resolveCdnUrl()` inside the retry loop, getting a fresh signed CDN URL for each attempt.
+
 ## Lessons Learned
 
 - **Grammar engine abstraction pays off immediately.** The `{ polish(text) }` interface means `main.js` doesn't care which backend is active — it just calls `.polish()` and gets text back. Adding a third backend (e.g., Claude API, Ollama) is a one-file change.
@@ -165,6 +171,7 @@ Stored at `~/Library/Application Support/EcoVoice/config.json`. Created automati
 - **Radio toggle auto-saves — no "Save" button needed.** Each radio change immediately saves the config and hot-swaps the grammar engine. This reduces UI complexity and eliminates the "forgot to save" failure mode.
 - **Fallbacks everywhere.** If the local model isn't downloaded → raw text. If the API key is missing → raw text. If polish throws an error → raw text. The app never refuses to inject just because grammar correction failed. This is critical for a tool that's meant to be always-available.
 - **Polish mode state lives in both main and renderer.** `main.js` holds the canonical `polishMode` flag (drives the actual routing decision). The renderer holds a mirror for UI display. They sync on init and on toggle. This dual-state pattern means the overlay always shows the correct visual state, even after a renderer crash/refresh.
+- **Never hardcode file sizes — ask the server.** The 986MB vs 1.28GB bug cost hours of debugging HTTP 416 errors, retry loops, and CDN analysis. The fix was one line: use the server's `Content-Length` header response instead of the hardcoded constant. The server always knows the real file size — the hardcoded value is only useful as an initial progress bar estimate before the first HTTP response arrives.
 
 ## Key Concepts & Technical Terms (For Interviews)
 
@@ -187,7 +194,7 @@ Stored at `~/Library/Application Support/EcoVoice/config.json`. Created automati
 
 ### Resumable Downloads (HTTP Range Requests)
 - **Definition:** The HTTP `Range` header lets a client request only a portion of a file from a specific byte offset. The server responds with HTTP 206 (Partial Content) and sends only the requested range.
-- **Why we use it:** The Qwen model is 1.2GB. If a download fails at 900MB, restarting from byte 0 would waste 900MB of bandwidth and time. The Range header lets us resume from byte 900,000,001.
+- **Why we use it:** The Qwen model is ~986MB. If a download fails at 500MB, restarting from byte 0 would waste 500MB of bandwidth and time. The Range header lets us resume from byte 500,000,001.
 - **Limitation:** Not all servers support Range requests. HuggingFace does. If a server doesn't, we fall back to a full re-download.
 
 ### macOS Application Support Directory
